@@ -1,0 +1,132 @@
+.ribbon {
+    position: absolute;
+    right: -5px;
+    top: -15px;
+    z-index: 1;
+    overflow: hidden;
+    width: 75px;
+    height: 75px;
+    text-align: right;
+}
+
+.ribbon span {
+    font-size: 11px;
+    font-weight: 500;
+    color: #FFF;
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 20px;
+    transform: rotate(45deg);
+    -webkit-transform: rotate(45deg);
+    width: 100px;
+    display: block;
+    position: absolute;
+    top: 19px;
+    right: -21px;
+}
+
+.ribbon span::before {
+    content: "";
+    position: absolute;
+    left: 0px;
+    top: 100%;
+    z-index: -1;
+    border-left: 3px solid #1C841B;
+    border-right: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-top: 3px solid #1C841B;
+}
+
+.ribbon span::after {
+    content: "";
+    position: absolute;
+    right: 0px;
+    top: 100%;
+    z-index: -1;
+    border-left: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+}
+
+.ribbon.success span {
+    background: #84c529;
+}
+
+.ribbon.success span::before {
+    border-left: 3px solid #1C841B;
+    border-top: 3px solid #1C841B;
+}
+
+.ribbon.success span::after {
+    border-right: 3px solid #1C841B;
+    border-top: 3px solid #1C841B;
+}
+
+.ribbon.muted span {
+    background: #6c7888;
+}
+
+.ribbon.muted span::before {
+    border-left: 3px solid #606973;
+    border-top: 3px solid #606973;
+}
+
+.ribbon.muted span::after {
+    border-right: 3px solid #606973;
+    border-top: 3px solid #606973;
+}
+
+.ribbon.danger span {
+    background: #FC2D42;
+}
+
+.ribbon.danger span::before {
+    border-left: 3px solid #DE1D30;
+    border-top: 3px solid #DE1D30;
+}
+
+.ribbon.danger span::after {
+    border-right: 3px solid #DE1D30;
+    border-top: 3px solid #DE1D30;
+}
+
+.ribbon.warning span {
+    background: #FF6F00;
+}
+
+.ribbon.warning span::before {
+    border-left: 3px solid #CA5800;
+    border-top: 3px solid #CA5800;
+}
+
+.ribbon.warning span::after {
+    border-right: 3px solid #CA5800;
+    border-top: 3px solid #CA5800;
+}
+
+.ribbon.info span {
+    background: #03a9f4;
+}
+
+.ribbon.info span::before {
+    border-left: 3px solid #03a9f4;
+    border-top: 3px solid #03a9f4;
+}
+
+.ribbon.info span::after {
+    border-right: 3px solid #03a9f4;
+    border-top: 3px solid #03a9f4;
+}
+
+.ribbon.default span {
+    background: #6c7888;
+}
+
+.ribbon.default span::before {
+    border-left: 3px solid #6c7888;
+    border-top: 3px solid #6c7888;
+}
+
+.ribbon.default span::after {
+    border-right: 3px solid #6c7888;
+    border-top: 3px solid #6c7888;
+}
