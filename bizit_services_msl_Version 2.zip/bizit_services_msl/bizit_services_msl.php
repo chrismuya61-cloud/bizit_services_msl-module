@@ -156,13 +156,23 @@ function bizit_services_msl_module_init_menu()
             ]);
         }
 
+        // NEW Submenu: Field Reports (Shortcut)
+        if (staff_can('view', BIZIT_SERVICES_MSL . '_rental_agreement_field_report')) {
+            $CI->app_menu->add_sidebar_children_item('services', [
+                'slug'     => 'services-field-reports',
+                'name'     => 'Field Reports',
+                'href'     => admin_url('services/field_reports'),
+                'position' => 3,
+            ]);
+        }
+
         // NEW Submenu: Staff Compensation Rates
         if (staff_can('view', BIZIT_SERVICES_MSL . '_compensation_rates')) {
             $CI->app_menu->add_sidebar_children_item('services', [
                 'slug'     => 'services-rates',
                 'name'     => 'Staff Compensation Rates',
                 'href'     => admin_url('services/staff_compensation_rates'),
-                'position' => 3,
+                'position' => 4,
             ]);
         }
 
@@ -172,7 +182,7 @@ function bizit_services_msl_module_init_menu()
                 'slug'     => 'services-reports',
                 'name'     => 'Reports Dashboard',
                 'href'     => admin_url('services/reports_dashboard'),
-                'position' => 4,
+                'position' => 5,
             ]);
         }
     }

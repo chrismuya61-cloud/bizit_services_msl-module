@@ -28,10 +28,22 @@ class Services extends AdminController
         $data['title'] = _l('services');
         $this->load->view('admin/services/manage', $data);
     }
+    
+    // --- NEW: FIELD REPORTS TABLE SHORTCUT ---
+    public function field_reports()
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement_field_report', '', 'view')) {
+            access_denied(BIZIT_SERVICES_MSL . '_rental_agreement_field_report');
+        }
 
-    // ==================================================
-    // NEW FEATURES: STAFF COMPENSATION & DASHBOARD
-    // ==================================================
+        if ($this->input->is_ajax_request()) {
+            $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_field_report'));
+        }
+
+        $data['title'] = 'Field Reports';
+        $this->load->view('admin/services/manage_field_reports', $data);
+    }
+    // ----------------------------------------
 
     public function staff_compensation_rates()
     {
@@ -76,7 +88,7 @@ class Services extends AdminController
     }
 
     // ==================================================
-    // CORE MODULE FUNCTIONS (Restored & Fixed)
+    // CORE MODULE FUNCTIONS
     // ==================================================
 
     public function get_serial_numbers_by_commodity_code()
@@ -886,11 +898,8 @@ class Services extends AdminController
             }
         }
     }
-
+    
     public function save_calibration() {
-        // This function handles the massive form for calibration instruments.
-        // To reduce redundancy (originally 500+ lines), we accept the raw post array for the dynamic fields.
-        
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'create') && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
 			access_denied('Services');
 		}
@@ -903,13 +912,12 @@ class Services extends AdminController
              $dms_fields = ['i_h_a', 'i_h_b', 'ii_h_a', 'ii_h_b', 'i_v_a', 'i_v_b', 'ii_v_a', 'ii_v_b', 'th_h_a', 'th_h_b', 'thh_h_a', 'thh_h_b', 'th_v_a', 'th_v_b', 'thh_v_a', 'thh_v_b', 'thh_v_c'];
              foreach($dms_fields as $f) {
                  if(isset($data[$f]) && is_array($data[$f])) {
-                     // Using helper function dms2dec
                      $data[$f] = dms2dec($data[$f][0], $data[$f][1], $data[$f][2]);
                  }
              }
         }
         
-        // GNSS Date Parsing (Handling start/stop times)
+        // GNSS Date Parsing
         if ($calibration_instrument == 'GNSS') {
              $current_date = date('Y-m-d');
              for($i=1; $i<=6; $i++){
@@ -942,18 +950,30 @@ class Services extends AdminController
     }
     
     // ==================================================
-    // MISC UTILITY & LEGACY FUNCTIONS (Restored)
+    // MISC UTILITY & LEGACY FUNCTIONS
     // ==================================================
+    
+    // NEW: Shortcut for Field Reports
+    public function field_reports()
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement_field_report', '', 'view')) {
+            access_denied(BIZIT_SERVICES_MSL . '_rental_agreement_field_report');
+        }
+        if ($this->input->is_ajax_request()) {
+            $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_field_report'));
+        }
+        $data['title'] = 'Field Reports';
+        $this->load->view('admin/services/manage_field_reports', $data);
+    }
 
     public function gpsDetails() { 
-        $data['gps_details'] = $this->services_model->get_gps_details(); // Note: Ensure model has this if used
+        $data['gps_details'] = $this->services_model->get_gps_details(); // Ensure model has this if used
         $this->load->view('admin/services/gps_details', $data); 
     }
     
     public function form() { $this->load->view('admin/services/gps_data_form'); }
     
     public function insert_data() { 
-        // Placeholder for legacy logic if needed, originally validated form and inserted data
         $this->load->view('admin/services/form_success');
     }
     
@@ -964,7 +984,6 @@ class Services extends AdminController
         $data['service_request_client'] = $this->clients_model->get($data['service_request']->clientid);
         $data['existing_accessories'] = $this->services_model->get_request_accessories($data['service_request']->service_request_id);
         
-        // Populate inspection/checklist data for PDF
         $data['checklist_items'] = $this->services_model->get_checklist_data($data['service_request']->service_request_id);
         $data['released_info'] = $this->services_model->get_collection_data($data['service_request']->service_request_id);
         $inspection_items = $this->services_model->get_inspection_data($data['service_request']->service_request_id);
@@ -973,7 +992,6 @@ class Services extends AdminController
             if ($item['inspection_type'] == 'pre_inspection') $data['pre_inspection_items'][] = (object)$item;
             elseif ($item['inspection_type'] == 'post_inspection') $data['post_inspection_items'][] = (object)$item;
         }
-        // Dropped off/Received info
         $info = $data['service_request'];
         $data['dropped_off_by'] = $info->dropped_off_by; $data['dropped_off_date'] = $info->dropped_off_date;
         $data['dropped_off_signature'] = $info->dropped_off_signature; $data['dropped_off_id_number'] = $info->dropped_off_id_number;
@@ -986,7 +1004,6 @@ class Services extends AdminController
 
     public function certificate_pdf($code = null) {
          $data['service_request'] = $this->services_model->get_request($code);
-         // Generate QR code for certificate
          $qr_data = site_url('service/certificate/validate/' . $data['service_request']->service_request_code);
          $data['qr_code_base64'] = $this->generate($qr_data);
          
@@ -1012,7 +1029,6 @@ class Services extends AdminController
          $data_service['actual_date_returned'] = to_sql_date($this->input->post('actual_date_returned', true));
          $this->db->where('service_rental_agreement_code', $code)->update('tblservice_rental_agreement', $data_service);
          
-         // Update Status to Not-Hired for items
          $s_ids = $this->db->select('tblservice_rental_agreement_details.serviceid')->join('tblservice_rental_agreement', 'tblservice_rental_agreement.service_rental_agreement_id = tblservice_rental_agreement_details.service_rental_agreement_id')->where('tblservice_rental_agreement.invoice_rel_id', $invoiceid)->get('tblservice_rental_agreement_details')->result();
          foreach($s_ids as $sid) { $this->db->where('serviceid', $sid->serviceid)->update('tblservices_module', ['rental_status' => 'Not-Hired']); }
 
@@ -1026,7 +1042,6 @@ class Services extends AdminController
         $service_rental_agreement = $this->db->where('service_rental_agreement_code', $code)->get('tblservice_rental_agreement')->row();
         $service_details = $this->services_model->get_rental_agreement_details($service_rental_agreement->service_rental_agreement_id);
         
-        // Calculation Logic
         $start = new DateTime($service_rental_agreement->start_date);
         $end = new DateTime($service_rental_agreement->end_date);
         $rental_days = $end->diff($start)->format('%a') - $service_rental_agreement->discounted_days;
@@ -1037,7 +1052,6 @@ class Services extends AdminController
             $subtotal += ($val->price * $rental_days);
         }
         
-        // Create Invoice
         $client = $this->clients_model->get($service_rental_agreement->clientid);
         $invoice_data = [
             "clientid" => $client->userid, 
@@ -1111,6 +1125,7 @@ class Services extends AdminController
          $data['service_rental_agreement'] = $this->db->where('service_rental_agreement_code', $code)->get('tblservice_rental_agreement')->row();
          $data['service_details'] = $this->services_model->get_rental_agreement_details($data['service_rental_agreement']->service_rental_agreement_id);
          $data['service_rental_agreement_client'] = $this->clients_model->get($data['service_rental_agreement']->clientid);
+         $data['service_info'] = $data['service_rental_agreement']; 
          
          try { $pdf = service_rental_agreement_pdf($data); } catch(Exception $e) { echo $e->getMessage(); die; }
          $pdf->Output('AGREEMENT.pdf', 'I');
@@ -1126,7 +1141,6 @@ class Services extends AdminController
         $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_report_files'), array('type' => $type, 'type_id' => $type_id));
     }
     
-    // Helper method for field operator assignment
     public function service_rental_agreement_reasign_field_operator() {
 		if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
 		$service_rental_agreement_id = $this->input->post('service_rental_agreement_id', true);
