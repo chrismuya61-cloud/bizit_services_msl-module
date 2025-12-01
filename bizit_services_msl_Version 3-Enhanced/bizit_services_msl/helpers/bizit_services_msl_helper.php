@@ -1,6 +1,8 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
-// --- V3 ENHANCEMENTS ---
+// ==========================================================
+// 1. V3 ENHANCEMENTS (QR, Reminders)
+// ==========================================================
 
 if (!function_exists('get_review_qr_code')) {
     function get_review_qr_code($rel_type, $rel_id) {
@@ -11,7 +13,8 @@ if (!function_exists('get_review_qr_code')) {
 
         if (!$token) return '';
         $url = site_url('bizit_services_msl/reviews/rate/' . $token);
-        $CI->load->library('ciqrcode'); $path = FCPATH.'uploads/temp/qr_'.$rel_type.'_'.$rel_id.'.png';
+        $CI->load->library('ciqrcode'); 
+        $path = FCPATH.'uploads/temp/qr_'.$rel_type.'_'.$rel_id.'.png';
         if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
         $CI->ciqrcode->generate(['data'=>$url, 'savename'=>$path, 'size'=>2]);
         return file_exists($path) ? '<img src="data:image/png;base64,'.base64_encode(file_get_contents($path)).'" />' : '';
@@ -34,7 +37,9 @@ if (!function_exists('bizit_check_calibration_reminders')) {
     }
 }
 
-// --- RESTORED V1 LOGIC (LEGACY SUPPORT) ---
+// ==========================================================
+// 2. V1 LEGACY LOGIC (Restored)
+// ==========================================================
 
 if (!function_exists('_raise_service_invoices')) {
     function _raise_service_invoices($code, $service_code, $request_table = '', $description = "", $draft = false)
@@ -42,13 +47,12 @@ if (!function_exists('_raise_service_invoices')) {
         $CI = &get_instance();
         $CI->load->model('invoices_model');
         $CI->load->model('clients_model');
-
         if (!isset($service_code)) return false;
 
         $service_request = $CI->db->where('request_code', $code)->get($request_table)->row();
         $qty_amt = 1;
 
-        // Specific business logic from V1
+        // Restored V1 Logic for Licenses/Time
         if (isset($service_request->hours) && isset($service_request->licences)) {
             $time_sub = $service_request->hours;
             if ($service_code == "004-0002") $time_sub = ($service_request->hours / 24);
@@ -56,9 +60,9 @@ if (!function_exists('_raise_service_invoices')) {
             else if ($service_code == "004-0004") $time_sub = ($service_request->hours / 24 / 365);
             $qty_amt = $time_sub * $service_request->licences;
         }
-
-        // Basic Invoice Generation logic
-        // Note: In V3 we have cleaner functions in the controller, but we keep this if legacy code calls it.
+        
+        // Note: Actual invoice creation logic typically handled in controller in V3,
+        // but this function is kept for compatibility with any external calls.
         return true; 
     }
 }
@@ -68,7 +72,6 @@ if (!function_exists('set_verification_qrcode')) {
     {
         $CI = &get_instance();
         $CI->load->library('ciqrcode');
-        // Use temp path instead of TEMP_FOLDER constant which might be undefined
         $filePath = FCPATH . 'uploads/temp/temp_qr_'.uniqid().'.png';
         if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
 
@@ -93,11 +96,14 @@ if (!function_exists('show_verification_qrcode')) {
     }
 }
 
-// --- UTILITIES ---
+// ==========================================================
+// 3. UTILITIES & PDF LOADERS
+// ==========================================================
 
 if (!function_exists('dms2dec')) {
     function dms2dec($deg, $min, $sec) { return (double)$deg + ((((double)$min * 60) + ((double)$sec)) / 3600); }
 }
+
 if (!function_exists('get_currency_symbol')) {
     function get_currency_symbol($id = false) {
         $CI = &get_instance();
@@ -106,6 +112,7 @@ if (!function_exists('get_currency_symbol')) {
         return function_exists('get_currency_symbol') ? get_currency_symbol($id) : '$';
     }
 }
+
 if (!function_exists('get_next_service_category_code_internal')) {
     function get_next_service_category_code_internal() {
         $CI = &get_instance();
@@ -115,8 +122,56 @@ if (!function_exists('get_next_service_category_code_internal')) {
     }
 }
 
-// PDF Placeholders to prevent crashes
-if(!function_exists('service_request_pdf')){ function service_request_pdf($d){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); return new Pdf(); } }
-if(!function_exists('service_rental_agreement_pdf')){ function service_rental_agreement_pdf($d){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); return new Pdf(); } }
-if(!function_exists('delivery_note_pdf')){ function delivery_note_pdf($d){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); return new Pdf(); } }
-if(!function_exists('inventory_checklist_pdf')){ function inventory_checklist_pdf($d){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); return new Pdf(); } }
+// PDF Functions - Now pointing to the correct libraries
+if(!function_exists('service_request_pdf')){ 
+    function service_request_pdf($data){ 
+        $CI=&get_instance(); 
+        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf');
+        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetTitle('Service Request');
+        // Load View via PDF Library helper or direct view loading if not using Wonder PDF
+        // For V3 we use the Wonder PDF integration primarily, but this is the fallback/core logic
+        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_requestpdf', $data); 
+        return $pdf;
+    } 
+}
+if(!function_exists('service_rental_agreement_pdf')){ 
+    function service_rental_agreement_pdf($data){ 
+        $CI=&get_instance(); 
+        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
+        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetTitle('Rental Agreement');
+        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_rental_agreementpdf', $data); 
+        return $pdf;
+    } 
+}
+if(!function_exists('delivery_note_pdf')){ 
+    function delivery_note_pdf($data){ 
+        $CI=&get_instance(); 
+        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
+        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetTitle('Delivery Note');
+        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_delivery_notepdf', $data); 
+        return $pdf;
+    } 
+}
+if(!function_exists('inventory_checklist_pdf')){ 
+    function inventory_checklist_pdf($data){ 
+        $CI=&get_instance(); 
+        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
+        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetTitle('Inventory Checklist');
+        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_inventory_checklistpdf', $data); 
+        return $pdf;
+    } 
+}
+if(!function_exists('service_request_report_pdf')){ 
+    function service_request_report_pdf($data){ 
+        $CI=&get_instance(); 
+        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
+        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetTitle('Calibration Report');
+        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_request_reportpdf', $data); 
+        return $pdf;
+    } 
+}
