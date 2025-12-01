@@ -5,7 +5,7 @@ class Services extends AdminController
     public function __construct()
     {
         parent::__construct();
-        // LOAD ALL 5 SPLIT MODELS
+        // LOAD ALL V3 MODELS
         $this->load->model([
             'bizit_services_msl/services_core_model',
             'bizit_services_msl/requests_model',
@@ -19,7 +19,49 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  CORE SERVICES & SETTINGS
+    //  1. AJAX UTILITIES (CRITICAL FOR JS AUTOMATION)
+    // ==========================================================
+
+    /**
+     * Used by JS to auto-generate the next Service Code based on Category
+     */
+    public function getNextServiceCode($type_code)
+    {
+        if (!$this->input->is_ajax_request()) show_404();
+        
+        // Logic: Count items in this category + 1, formatted as CODE-000X
+        $count = $this->db->where('service_type_code', $type_code)->count_all_results('tblservices_module');
+        $next = $count + 1;
+        echo sprintf("%s-%04d", $type_code, $next);
+    }
+
+    /**
+     * Used by Invoice Page JS to populate "Service" dropdown
+     */
+    public function get_services($type_code)
+    {
+        if (!$this->input->is_ajax_request()) show_404();
+        $services = $this->services_core_model->get_all_services($type_code);
+        echo json_encode($services);
+    }
+
+    /**
+     * Used by Invoice Page JS to auto-fill Description & Price
+     */
+    public function get_service_by_code($code)
+    {
+        if (!$this->input->is_ajax_request()) show_404();
+        $service = $this->services_core_model->get_service_by_code($code);
+        if($service) {
+            // Fetch category name for description
+            $cat = $this->db->where('type_code', $service->service_type_code)->get('tblservice_type')->row();
+            $service->category_name = $cat ? $cat->name : '';
+        }
+        echo json_encode($service);
+    }
+    
+    // ==========================================================
+    //  2. CORE SERVICES & SETTINGS
     // ==========================================================
 
     public function index()
@@ -76,7 +118,6 @@ class Services extends AdminController
         }
     }
 
-    // --- RESTORED: SALES LIST ---
     public function sales_list()
     {
         if ($this->input->is_ajax_request()) {
@@ -86,7 +127,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  SERVICE REQUESTS & CALIBRATION
+    //  3. SERVICE REQUESTS & CALIBRATION
     // ==========================================================
 
     public function requests()
@@ -110,12 +151,12 @@ class Services extends AdminController
             $data['request_details'] = $this->requests_model->get_request_details($data['request']->service_request_id);
             $data['service_request_client'] = $this->clients_model->get($data['request']->clientid);
             $data['existing_accessories'] = $this->requests_model->get_request_accessories($data['request']->service_request_id);
-            
             $data['checklist_items'] = $this->requests_model->get_checklist_data($data['request']->service_request_id);
             $data['uploaded_files'] = $this->requests_model->get_service_files($data['request']->service_request_id);
             
             foreach(['dropped_off_by','dropped_off_date','req_received_by','received_date'] as $f) $data[$f] = $data['request']->$f;
-
+            
+            // Inspections
             $inspections = $this->requests_model->get_inspection_data($data['request']->service_request_id);
             $data['pre_inspection_items'] = []; $data['post_inspection_items'] = [];
             foreach ($inspections as $i) {
@@ -155,7 +196,6 @@ class Services extends AdminController
         $this->load->view('admin/services/view_request', $data);
     }
 
-    // --- RESTORED: REPORT PDF/VIEW LOGIC ---
     public function report($flag = null, $code = null)
     {
         if (empty($flag)) redirect(admin_url('services/requests'));
@@ -177,6 +217,7 @@ class Services extends AdminController
             $this->load->library('ciqrcode');
             $params['data'] = site_url('services/certificate/' . $code);
             $params['savename'] = FCPATH . 'uploads/temp/' . $code . '_qr.png';
+            if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
             $this->ciqrcode->generate($params);
             $data['qr_code_base64'] = base64_encode(file_get_contents($params['savename']));
             unlink($params['savename']);
@@ -210,7 +251,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  RENTAL AGREEMENTS
+    //  4. RENTAL AGREEMENTS
     // ==========================================================
 
     public function rental_agreements()
@@ -269,7 +310,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  FIELD REPORTS & COMPENSATION
+    //  5. FIELD REPORTS, COMPENSATION & DASHBOARD
     // ==========================================================
 
     public function field_reports()
@@ -300,7 +341,6 @@ class Services extends AdminController
         }
     }
 
-    // --- RESTORED: APPROVE/REJECT LOGIC ---
     public function manage_field_report_appr_rej()
     {
         if ($this->input->post()) {
@@ -348,7 +388,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  UTILITIES & PDF
+    //  6. UTILITIES (INVOICE, UPLOAD, PDF)
     // ==========================================================
 
     public function rental_agreement_invoice_generation($code)
@@ -368,11 +408,9 @@ class Services extends AdminController
             $subtotal += ($d->price * $days);
             $i++;
         }
-
         if ($agr->extra_days > 0) {
             $newitems[$i] = ["order" => $i, "description" => "Extra Days Penalty", "qty" => $agr->extra_days, "unit" => "Days", "rate" => 0, "taxable" => 1]; 
         }
-
         $client = $this->clients_model->get($agr->clientid);
         $inv_data = [
             "clientid" => $client->userid, "date" => _d(date('Y-m-d')), "currency" => get_default_currency('id'),
@@ -404,12 +442,11 @@ class Services extends AdminController
         return $uploaded;
     }
     
-    // Legacy PDF Wrappers
     public function request_pdf($code) { 
         $data['service_request'] = $this->requests_model->get_request($code);
         $data['service_details'] = $this->requests_model->get_request_details($data['service_request']->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($data['service_request']->clientid);
-        $data['pre_inspection_items'] = []; 
+        $data['pre_inspection_items'] = [];
         $pdf = service_request_pdf($data);
         $pdf->Output('REQUEST.pdf', 'I');
     }
@@ -422,7 +459,6 @@ class Services extends AdminController
         $pdf->Output('AGREEMENT.pdf', 'I');
     }
     
-    // --- RESTORED UTILITIES ---
     public function change_assignee($id) { 
         if(is_admin()) $this->db->where('id',$id)->update('tblinvoices',['addedfrom'=>$this->input->post('addedfrom')]); 
         redirect(admin_url('invoices/list_invoices#'.$id)); 
@@ -432,7 +468,6 @@ class Services extends AdminController
         if($this->input->is_ajax_request()) echo $this->invoices_model->inventory_qty_check($pid, $qty); 
     }
 
-    // PDF Viewing Functions (Delivery Note, Checklist)
     public function delivery_note($invoice_id) {
         $invoice = $this->invoices_model->get($invoice_id);
         $data['invoice_number'] = format_invoice_number($invoice->id);
