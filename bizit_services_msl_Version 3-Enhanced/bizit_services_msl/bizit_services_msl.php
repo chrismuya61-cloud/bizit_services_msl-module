@@ -1,26 +1,72 @@
 <?php
-
 defined('BASEPATH') or exit('No direct script access allowed');
-
 /*
 Module Name: Bizit Services MSL
-Description: Complete Service, Rental, Compensation & Review Management (V3.2)
+Description: Modular Service, Rental & Performance Management System (V3.2)
 Version: 1.1.3
-Author: Chris Muya-Measurement Systems Limited 
-Author URI: https://measurementsystems.org 
+Author: Swivernet
 */
-
 define('BIZIT_SERVICES_MSL', 'bizit_services_msl');
-define('SERVICES_NOT_TO_DELETE', ['003-0001', '004-0001', '004-0002', '004-0003', '004-0004', '005-0001', '006-0001', '006-0002']);
 
-// ------------------------------------------------------------------------
-// HOOKS REGISTER
-// ------------------------------------------------------------------------
-
-// 1. Init Hooks
+// --- HOOKS ---
 hooks()->add_action('admin_init', 'bizit_services_msl_permissions');
 hooks()->add_filter('admin_init', 'bizit_services_msl_module_init_menu');
 hooks()->add_action('before_js_scripts_render', 'bizit_services_msl_script');
+// Automations
+hooks()->add_action('before_render_invoice_template', 'bizit_inject_tech_engineer_field');
+hooks()->add_action('after_invoice_added', 'bizit_handle_invoice_tech_logic');
+hooks()->add_action('after_invoice_updated', 'bizit_handle_invoice_tech_logic');
+hooks()->add_action('after_cron_run', 'bizit_check_module_reminders');
+// Restored Legacy Hooks
+hooks()->add_filter('bizit_invoices_data', 'bizit_services_msl_invoices_data');
+hooks()->add_filter('bizit_estimates_data', 'bizit_services_msl_estimates_data');
+hooks()->add_action('after_invoice_view_as_client_link', 'delivery_note_pdf_link');
+
+$CI = &get_instance();
+$CI->load->helper(BIZIT_SERVICES_MSL . '/' . BIZIT_SERVICES_MSL);
+
+function bizit_services_msl_script(){
+    $CI = &get_instance();
+    $CI->app_scripts->add(BIZIT_SERVICES_MSL.'-js', module_dir_url(BIZIT_SERVICES_MSL, 'assets/js/bizit_services_msl.js'));
+}
+
+function bizit_services_msl_permissions(){
+    $caps = ['view_own'=>'View (Own)', 'view'=>'View (Global)', 'create'=>'Create', 'edit'=>'Edit', 'delete'=>'Delete'];
+    register_staff_capabilities(BIZIT_SERVICES_MSL, $caps, 'Bizit Services');
+    register_staff_capabilities(BIZIT_SERVICES_MSL.'_rental_agreement', $caps, 'Rental Agreements');
+    register_staff_capabilities(BIZIT_SERVICES_MSL.'_rental_agreement_field_report', $caps, 'Field Reports');
+    register_staff_capabilities(BIZIT_SERVICES_MSL.'_compensation_rates', ['view'=>'View','edit'=>'Edit'], 'Staff Compensation');
+    register_staff_capabilities(BIZIT_SERVICES_MSL.'_reports_dashboard', ['view'=>'View'], 'Reports Dashboard');
+}
+
+function bizit_services_msl_module_init_menu(){
+    $CI = &get_instance();
+    if (staff_can('view', BIZIT_SERVICES_MSL) || staff_can('view_own', BIZIT_SERVICES_MSL)) {
+        $CI->app_menu->add_sidebar_menu_item('services', ['name'=>'Services', 'collapse'=>true, 'position'=>11, 'icon'=>'fa fa-wrench']);
+        
+        // 1. Requests
+        $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-requests', 'name'=>'Service Requests', 'href'=>admin_url('services/requests'), 'position'=>1]);
+        
+        // 2. Rentals
+        if(staff_can('view', BIZIT_SERVICES_MSL.'_rental_agreement') || staff_can('view_own', BIZIT_SERVICES_MSL.'_rental_agreement')) 
+            $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-hire', 'name'=>'Rental Agreements', 'href'=>admin_url('services/rental_agreements'), 'position'=>2]);
+            
+        // 3. Sales List (RESTORED)
+        $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-sales-list', 'name'=>'Sales List', 'href'=>admin_url('services/sales_list'), 'position'=>3]);
+
+        // 4. Field Reports
+        if(staff_can('view', BIZIT_SERVICES_MSL.'_rental_agreement_field_report') || staff_can('view_own', BIZIT_SERVICES_MSL.'_rental_agreement_field_report')) 
+            $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-field-reports', 'name'=>'Field Reports', 'href'=>admin_url('services/field_reports'), 'position'=>4]);
+        
+        // 5. Compensation
+        if(staff_can('view', BIZIT_SERVICES_MSL.'_compensation_rates')) 
+            $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-rates', 'name'=>'Staff Rates', 'href'=>admin_url('services/staff_compensation_rates'), 'position'=>5]);
+        
+        // 6. Dashboard
+        if(staff_can('view', BIZIT_SERVICES_MSL.'_reports_dashboard')) 
+            $CI->app_menu->add_sidebar_children_item('services', ['slug'=>'services-dashboard', 'name'=>'Performance Dashboard', 'href'=>admin_url('services/reports_dashboard'), 'position'=>6]);
+    }
+}
 
 // 2. V3 Automation Hooks
 hooks()->add_action('before_render_invoice_template', 'bizit_inject_tech_engineer_field');
