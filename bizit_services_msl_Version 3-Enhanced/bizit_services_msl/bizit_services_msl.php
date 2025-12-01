@@ -1,25 +1,34 @@
 <?php
+
 defined('BASEPATH') or exit('No direct script access allowed');
+
 /*
 Module Name: Bizit Services MSL
-Description: Modular Service, Rental & Performance Management System (V3.2)
+Description: Complete Service, Rental, Compensation & Review Management (V3.2)
 Version: 1.1.3
-Author: Chris muya-Measurement Systems Limited
+Author: Swivernet
+Author URI: https://tazamali.com
 */
-define('BIZIT_SERVICES_MSL', 'bizit_services_msl');
 
-// --- INIT HOOKS ---
+define('BIZIT_SERVICES_MSL', 'bizit_services_msl');
+define('SERVICES_NOT_TO_DELETE', ['003-0001', '004-0001', '004-0002', '004-0003', '004-0004', '005-0001', '006-0001', '006-0002']);
+
+// ------------------------------------------------------------------------
+// HOOKS REGISTER
+// ------------------------------------------------------------------------
+
+// 1. Init Hooks
 hooks()->add_action('admin_init', 'bizit_services_msl_permissions');
 hooks()->add_filter('admin_init', 'bizit_services_msl_module_init_menu');
 hooks()->add_action('before_js_scripts_render', 'bizit_services_msl_script');
 
-// --- V3 AUTOMATION HOOKS ---
+// 2. V3 Automation Hooks
 hooks()->add_action('before_render_invoice_template', 'bizit_inject_tech_engineer_field');
 hooks()->add_action('after_invoice_added', 'bizit_handle_invoice_tech_logic');
 hooks()->add_action('after_invoice_updated', 'bizit_handle_invoice_tech_logic');
 hooks()->add_action('after_cron_run', 'bizit_check_module_reminders');
 
-// --- RESTORED LEGACY HOOKS (From V1) ---
+// 3. V1 Legacy Hooks (Restored)
 hooks()->add_filter('bizit_invoices_data', 'bizit_services_msl_invoices_data');
 hooks()->add_filter('bizit_estimates_data', 'bizit_services_msl_estimates_data');
 hooks()->add_action('after_invoice_view_as_client_link', 'delivery_note_pdf_link');
@@ -27,7 +36,10 @@ hooks()->add_action('after_invoice_view_as_client_link', 'delivery_note_pdf_link
 $CI = &get_instance();
 $CI->load->helper(BIZIT_SERVICES_MSL . '/' . BIZIT_SERVICES_MSL);
 
-// --- SCRIPTS & PERMISSIONS ---
+// ------------------------------------------------------------------------
+// FUNCTIONS
+// ------------------------------------------------------------------------
+
 function bizit_services_msl_script(){
     $CI = &get_instance();
     $CI->app_scripts->add(BIZIT_SERVICES_MSL.'-js', module_dir_url(BIZIT_SERVICES_MSL, 'assets/js/bizit_services_msl.js'));
@@ -62,7 +74,7 @@ function bizit_services_msl_module_init_menu(){
     }
 }
 
-// --- V3 AUTOMATION FUNCTIONS ---
+// V3 Automation
 function bizit_inject_tech_engineer_field($invoice){
     $CI = &get_instance(); $CI->load->model('staff_model');
     $staff = $CI->staff_model->get('', ['active'=>1]);
@@ -93,8 +105,7 @@ function bizit_check_module_reminders(){
     if(function_exists('bizit_check_field_report_reminders')) bizit_check_field_report_reminders();
 }
 
-// --- RESTORED LEGACY FUNCTIONS (V1) ---
-
+// V1 Legacy Restorations
 function bizit_services_msl_invoices_data($invoice_data){
     $to_remove = ['service_select', 'invoice_services'];
     foreach ($to_remove as $val) { unset($invoice_data[$val]); }
