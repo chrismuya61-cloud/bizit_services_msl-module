@@ -5,7 +5,6 @@ class Services extends ClientsController
     public function __construct()
     {
         parent::__construct();
-        // Load V3 Models
         $this->load->model('bizit_services_msl/requests_model');
         $this->load->model('bizit_services_msl/reports_model');
         $this->load->model('clients_model');
@@ -18,10 +17,14 @@ class Services extends ClientsController
     }
 
     /**
-     * View Calibration Certificate (Simple Verification)
+     * View Calibration Certificate
+     * Supports V3 (code only) and V1 (flag+code)
      */
-    public function certificate($code = null)
+    public function certificate($flag_or_code = null, $legacy_code = null)
     {
+        // Handle legacy URLs: services/certificate/validate/REQ-123
+        $code = ($legacy_code) ? $legacy_code : $flag_or_code;
+        
         if (empty($code)) show_404();
 
         $data['service_request'] = $this->requests_model->get_request($code);
@@ -34,18 +37,18 @@ class Services extends ClientsController
     }
     
     /**
-     * View Full Calibration Report (Detailed Readings)
-     * Missing in previous batch
+     * View Full Calibration Report
      */
-    public function report($code = null)
+    public function report($flag_or_code = null, $legacy_code = null)
     {
+        $code = ($legacy_code) ? $legacy_code : $flag_or_code;
         if(empty($code)) show_404();
         
         $req = $this->requests_model->get_request($code);
         if(!$req) show_404();
         
         $data['service_request'] = $req;
-        $data['service_info'] = $req; // Alias for view compatibility
+        $data['service_info'] = $req; 
         $data['calibration_info'] = $this->requests_model->get_report_check($req->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($req->clientid);
         
@@ -56,7 +59,7 @@ class Services extends ClientsController
     }
 
     /**
-     * View Field Report (For Rental Clients)
+     * View Field Report
      */
     public function field_report($code = null)
     {
@@ -66,8 +69,6 @@ class Services extends ClientsController
         if (!$report) show_404();
 
         $data['field_report_info'] = $report;
-        
-        // Get Equipment Details manually via Query to avoid loading Admin Rental Model
         $data['service_details'] = $this->db->select('d.*, m.name, m.rental_serial, d.price as description')
             ->from('tblservice_rental_agreement_details d')
             ->join('tblservices_module m', 'm.serviceid=d.serviceid')
