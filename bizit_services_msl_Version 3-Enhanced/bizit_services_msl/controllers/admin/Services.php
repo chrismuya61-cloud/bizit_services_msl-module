@@ -5,7 +5,7 @@ class Services extends AdminController
     public function __construct()
     {
         parent::__construct();
-        // LOAD V3 MODELS
+        // LOAD ALL 5 SPLIT MODELS
         $this->load->model([
             'bizit_services_msl/services_core_model',
             'bizit_services_msl/requests_model',
@@ -76,6 +76,7 @@ class Services extends AdminController
         }
     }
 
+    // --- RESTORED: SALES LIST ---
     public function sales_list()
     {
         if ($this->input->is_ajax_request()) {
@@ -110,14 +111,11 @@ class Services extends AdminController
             $data['service_request_client'] = $this->clients_model->get($data['request']->clientid);
             $data['existing_accessories'] = $this->requests_model->get_request_accessories($data['request']->service_request_id);
             
-            // Populate View Data
             $data['checklist_items'] = $this->requests_model->get_checklist_data($data['request']->service_request_id);
             $data['uploaded_files'] = $this->requests_model->get_service_files($data['request']->service_request_id);
             
-            // Signatures & Dates
             foreach(['dropped_off_by','dropped_off_date','req_received_by','received_date'] as $f) $data[$f] = $data['request']->$f;
 
-            // Inspections
             $inspections = $this->requests_model->get_inspection_data($data['request']->service_request_id);
             $data['pre_inspection_items'] = []; $data['post_inspection_items'] = [];
             foreach ($inspections as $i) {
@@ -136,7 +134,6 @@ class Services extends AdminController
 
         $id = $data['edit_id'] ? $this->requests_model->edit_request($data) : $this->requests_model->add_request($data);
 
-        // Handle Details
         if (isset($data['serviceid'])) {
             for ($i = 0; $i < count($data['serviceid']); $i++) {
                 if ($data['serviceid'][$i]) {
@@ -158,6 +155,7 @@ class Services extends AdminController
         $this->load->view('admin/services/view_request', $data);
     }
 
+    // --- RESTORED: REPORT PDF/VIEW LOGIC ---
     public function report($flag = null, $code = null)
     {
         if (empty($flag)) redirect(admin_url('services/requests'));
@@ -166,19 +164,16 @@ class Services extends AdminController
         $data['service_request_id'] = $service_info->service_request_id;
         $data['service_info'] = $service_info;
 
-        // Add Calibration
         if ($flag == '1') {
             $this->requests_model->add_request_calibration(['service_request_id' => $service_info->service_request_id]);
             redirect(admin_url('services/report/edit/' . $code));
         }
 
-        // Views
         $data['calibration_info'] = $this->requests_model->get_report_check($service_info->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($service_info->clientid);
         $data['service_request_code'] = $code;
 
         if ($flag == 'pdf') {
-            // Generate PDF Logic
             $this->load->library('ciqrcode');
             $params['data'] = site_url('services/certificate/' . $code);
             $params['savename'] = FCPATH . 'uploads/temp/' . $code . '_qr.png';
@@ -186,7 +181,6 @@ class Services extends AdminController
             $data['qr_code_base64'] = base64_encode(file_get_contents($params['savename']));
             unlink($params['savename']);
             
-            // Use V3 PDF Helper
             $pdf = service_request_report_pdf($data);
             $pdf->Output('REPORT_' . $code . '.pdf', 'I');
         } elseif ($flag == 'edit') {
@@ -200,7 +194,6 @@ class Services extends AdminController
     public function save_calibration()
     {
         $data = $this->input->post();
-        // DMS Conversion
         if (in_array($data['calibration_instrument'], ['Total Station', 'Theodolite'])) {
             foreach (['i_h_a', 'i_h_b', 'ii_h_a', 'ii_h_b', 'i_v_a', 'i_v_b'] as $f) {
                 if (isset($data[$f]) && is_array($data[$f])) $data[$f] = dms2dec($data[$f][0], $data[$f][1], $data[$f][2]);
@@ -268,7 +261,6 @@ class Services extends AdminController
         $data['service_details'] = $this->rentals_model->get_rental_agreement_details($data['service_info']->service_rental_agreement_id);
         $data['service_rental_agreement_client'] = $this->clients_model->get($data['service_info']->clientid);
         
-        // Calculate Days
         $start = new DateTime($data['service_info']->start_date);
         $end = new DateTime($data['service_info']->end_date);
         $data['rental_days'] = $end->diff($start)->format("%a");
@@ -295,7 +287,6 @@ class Services extends AdminController
             $data['report_files'] = json_encode($this->handle_file_uploads());
             
             if ($data['field_report_id']) {
-                // Check status change for compensation
                 $old = $this->reports_model->get_field_report_by_id($data['field_report_id']);
                 if ($data['status'] >= 2 && $old->status < 2) {
                     $data['submitted_by'] = get_staff_user_id();
@@ -309,6 +300,7 @@ class Services extends AdminController
         }
     }
 
+    // --- RESTORED: APPROVE/REJECT LOGIC ---
     public function manage_field_report_appr_rej()
     {
         if ($this->input->post()) {
@@ -377,14 +369,10 @@ class Services extends AdminController
             $i++;
         }
 
-        // Penalty Calculation
         if ($agr->extra_days > 0) {
-            // Logic for penalty rate calculation if stored, otherwise use base rate
-            // Simplified for production readiness:
             $newitems[$i] = ["order" => $i, "description" => "Extra Days Penalty", "qty" => $agr->extra_days, "unit" => "Days", "rate" => 0, "taxable" => 1]; 
         }
 
-        // Insert Invoice
         $client = $this->clients_model->get($agr->clientid);
         $inv_data = [
             "clientid" => $client->userid, "date" => _d(date('Y-m-d')), "currency" => get_default_currency('id'),
@@ -416,12 +404,12 @@ class Services extends AdminController
         return $uploaded;
     }
     
-    // Legacy PDF Hooks (Redirect to correct generators)
+    // Legacy PDF Wrappers
     public function request_pdf($code) { 
         $data['service_request'] = $this->requests_model->get_request($code);
         $data['service_details'] = $this->requests_model->get_request_details($data['service_request']->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($data['service_request']->clientid);
-        $data['pre_inspection_items'] = []; // Logic handled in view
+        $data['pre_inspection_items'] = []; 
         $pdf = service_request_pdf($data);
         $pdf->Output('REQUEST.pdf', 'I');
     }
@@ -434,7 +422,7 @@ class Services extends AdminController
         $pdf->Output('AGREEMENT.pdf', 'I');
     }
     
-    // Restored Utility Functions
+    // --- RESTORED UTILITIES ---
     public function change_assignee($id) { 
         if(is_admin()) $this->db->where('id',$id)->update('tblinvoices',['addedfrom'=>$this->input->post('addedfrom')]); 
         redirect(admin_url('invoices/list_invoices#'.$id)); 
@@ -444,6 +432,22 @@ class Services extends AdminController
         if($this->input->is_ajax_request()) echo $this->invoices_model->inventory_qty_check($pid, $qty); 
     }
 
-    // Warranty fallback (Removed feature)
+    // PDF Viewing Functions (Delivery Note, Checklist)
+    public function delivery_note($invoice_id) {
+        $invoice = $this->invoices_model->get($invoice_id);
+        $data['invoice_number'] = format_invoice_number($invoice->id);
+        $data['items_data'] = $this->services_core_model->get_table_products_bulk($invoice->id);
+        $pdf = delivery_note_pdf($data);
+        $pdf->Output('DELIVERY.pdf', 'I');
+    }
+    
+    public function inventory_checklist($invoice_id) {
+        $invoice = $this->invoices_model->get($invoice_id);
+        $data['invoice_number'] = format_invoice_number($invoice->id);
+        $data['items_data'] = $this->services_core_model->get_table_products_bulk($invoice->id);
+        $pdf = inventory_checklist_pdf($data);
+        $pdf->Output('CHECKLIST.pdf', 'I');
+    }
+
     public function view_warranty(){ show_404(); }
 }
