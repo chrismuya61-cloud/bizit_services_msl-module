@@ -6,8 +6,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 Module Name: Bizit Services MSL
 Description: Complete Service, Rental, Compensation & Review Management (V3.2)
 Version: 1.1.3
-Author: Swivernet
-Author URI: https://tazamali.com
+Author: Chris Muya-Measurement Systems Limited 
+Author URI: https://measurementsystems.org 
 */
 
 define('BIZIT_SERVICES_MSL', 'bizit_services_msl');
