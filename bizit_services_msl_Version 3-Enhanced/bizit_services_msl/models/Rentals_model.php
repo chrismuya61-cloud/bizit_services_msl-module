@@ -21,11 +21,22 @@ class Rentals_model extends App_Model {
 
     public function get_rental_agreement_files($id) { $r=$this->db->where('service_rental_agreement_id', $id)->get('tblservice_rental_agreement')->row(); return $r ? json_decode($r->report_files, true) : []; }
     
+    // --- ENHANCED CALENDAR FUNCTION ---
     public function get_calendar_rental_details() {
-        return $this->db->select('d.*, a.start_date, a.end_date, m.name')
+        return $this->db->select('
+                d.*, 
+                a.start_date, 
+                a.end_date, 
+                a.service_rental_agreement_code,
+                m.name,
+                m.rental_serial,
+                c.company as client_name
+            ')
             ->from('tblservice_rental_agreement_details d')
             ->join('tblservice_rental_agreement a', 'a.service_rental_agreement_id = d.service_rental_agreement_id')
             ->join('tblservices_module m', 'm.serviceid = d.serviceid')
-            ->where('a.status !=', 1)->get()->result();
+            ->join('tblclients c', 'c.userid = a.clientid', 'left')
+            ->where('a.status !=', 1) // Exclude drafts if needed
+            ->get()->result();
     }
 }
