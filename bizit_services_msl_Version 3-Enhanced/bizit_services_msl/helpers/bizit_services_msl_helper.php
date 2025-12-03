@@ -1,7 +1,7 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
 // ==========================================================
-// 1. V3 ENHANCEMENTS
+// 1. V3 ENHANCEMENTS (QR, Reminders)
 // ==========================================================
 
 if (!function_exists('get_review_qr_code')) {
@@ -38,7 +38,7 @@ if (!function_exists('bizit_check_calibration_reminders')) {
 }
 
 // ==========================================================
-// 2. CORE BUSINESS LOGIC
+// 2. CORE LOGIC (FIXED: NOW SAVES TO DB)
 // ==========================================================
 
 if (!function_exists('_raise_service_invoices')) {
@@ -53,7 +53,6 @@ if (!function_exists('_raise_service_invoices')) {
         $service_request = $CI->db->where('request_code', $code)->get($request_table)->row();
         $qty_amt = 1;
         
-        // Calculate Quantity Logic
         if (isset($service_request->hours) && isset($service_request->licences)) {
             $time_sub = $service_request->hours;
             if ($service_code == "004-0002") $time_sub = ($service_request->hours / 24);
@@ -62,7 +61,6 @@ if (!function_exists('_raise_service_invoices')) {
             $qty_amt = $time_sub * $service_request->licences;
         }
 
-        // Get Service Details
         $service_details = $CI->db->select('m.name, m.price, m.quantity_unit, m.description, m.service_code, t.name as category_name')
             ->from('tblservices_module m')
             ->join('tblservice_type t', 'm.service_type_code = t.type_code')
@@ -105,7 +103,7 @@ if (!function_exists('_raise_service_invoices')) {
             "terms" => get_option('predefined_terms_invoice')
         ];
 
-        // --- RESTORED: INSERT TO DB ---
+        // --- CRITICAL FIX: INSERT DB ---
         $id = $CI->invoices_model->add($invoice_data);
         if ($id) {
             $CI->db->where('id', $service_request->id)->update($request_table, ['invoice_rel_id' => $id]);
@@ -115,26 +113,24 @@ if (!function_exists('_raise_service_invoices')) {
     }
 }
 
+// ==========================================================
+// 3. UTILITIES
+// ==========================================================
+
 if (!function_exists('set_verification_qrcode')) {
-    function set_verification_qrcode($data)
-    {
-        $CI = &get_instance();
-        $CI->load->library('ciqrcode');
+    function set_verification_qrcode($data) {
+        $CI = &get_instance(); $CI->load->library('ciqrcode');
         $filePath = FCPATH . 'uploads/temp/temp_qr_'.uniqid().'.png';
         if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
-
         $codeContents = isset($data->verificationUrl) ? $data->verificationUrl : '';
         $CI->ciqrcode->generate(['data'=>$codeContents, 'savename'=>$filePath, 'size'=>2]);
-
-        $qrImage = file_get_contents($filePath);
-        unlink($filePath);
+        $qrImage = file_get_contents($filePath); unlink($filePath);
         return base64_encode($qrImage);
     }
 }
 
 if (!function_exists('show_verification_qrcode')) {
-    function show_verification_qrcode($data)
-    {
+    function show_verification_qrcode($data) {
         if (!empty($data)) {
             $data_obj = json_decode(json_encode($data));
             $img_base64_encoded = 'data:image/png;base64,' . set_verification_qrcode($data_obj);
@@ -144,10 +140,6 @@ if (!function_exists('show_verification_qrcode')) {
     }
 }
 
-// ==========================================================
-// 3. UTILITIES & PDF LOADERS
-// ==========================================================
-
 if (!function_exists('dms2dec')) {
     function dms2dec($deg, $min, $sec) { return (double)$deg + ((((double)$min * 60) + ((double)$sec)) / 3600); }
 }
@@ -156,7 +148,6 @@ if (!function_exists('get_currency_symbol')) {
     function get_currency_symbol($id = false) {
         $CI = &get_instance();
         if(!function_exists('get_currency_symbol')) $CI->load->helper('invoices');
-        if(!function_exists('app_format_money')) $CI->load->helper('number');
         return function_exists('get_currency_symbol') ? get_currency_symbol($id) : '$';
     }
 }
@@ -170,57 +161,12 @@ if (!function_exists('get_next_service_category_code_internal')) {
     }
 }
 
-// PDF Wrappers
-if(!function_exists('service_request_pdf')){ 
-    function service_request_pdf($data){ 
-        $CI=&get_instance(); 
-        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf');
-        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetTitle('Service Request');
-        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_requestpdf', $data); 
-        return $pdf;
-    } 
-}
-if(!function_exists('service_rental_agreement_pdf')){ 
-    function service_rental_agreement_pdf($data){ 
-        $CI=&get_instance(); 
-        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
-        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetTitle('Rental Agreement');
-        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_rental_agreementpdf', $data); 
-        return $pdf;
-    } 
-}
-if(!function_exists('delivery_note_pdf')){ 
-    function delivery_note_pdf($data){ 
-        $CI=&get_instance(); 
-        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
-        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetTitle('Delivery Note');
-        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_delivery_notepdf', $data); 
-        return $pdf;
-    } 
-}
-if(!function_exists('inventory_checklist_pdf')){ 
-    function inventory_checklist_pdf($data){ 
-        $CI=&get_instance(); 
-        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
-        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetTitle('Inventory Checklist');
-        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_inventory_checklistpdf', $data); 
-        return $pdf;
-    } 
-}
-if(!function_exists('service_request_report_pdf')){ 
-    function service_request_report_pdf($data){ 
-        $CI=&get_instance(); 
-        $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); 
-        $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetTitle('Calibration Report');
-        $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_request_reportpdf', $data); 
-        return $pdf;
-    } 
-}
+// PDF WRAPPERS
+if(!function_exists('service_request_pdf')){ function service_request_pdf($data){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false); $pdf->SetTitle('Service Request'); $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_requestpdf', $data); return $pdf; } }
+if(!function_exists('service_rental_agreement_pdf')){ function service_rental_agreement_pdf($data){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false); $pdf->SetTitle('Rental Agreement'); $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_rental_agreementpdf', $data); return $pdf; } }
+if(!function_exists('delivery_note_pdf')){ function delivery_note_pdf($data){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false); $pdf->SetTitle('Delivery Note'); $pdf->load_view('wonder_pdf_template/pdf/gamma/my_delivery_notepdf', $data); return $pdf; } }
+if(!function_exists('inventory_checklist_pdf')){ function inventory_checklist_pdf($data){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false); $pdf->SetTitle('Inventory Checklist'); $pdf->load_view('wonder_pdf_template/pdf/gamma/my_inventory_checklistpdf', $data); return $pdf; } }
+if(!function_exists('service_request_report_pdf')){ function service_request_report_pdf($data){ $CI=&get_instance(); $CI->load->library(BIZIT_SERVICES_MSL.'/pdf'); $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false); $pdf->SetTitle('Calibration Report'); $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_request_reportpdf', $data); return $pdf; } }
 
 if (!function_exists('handle_service_report_attachments')) {
     function handle_service_report_attachments($type, $id)
@@ -247,56 +193,32 @@ if (!function_exists('handle_service_report_attachments')) {
     }
 }
 
-// ==========================================================
-// 4. RESTORED NOTIFICATION FUNCTIONS
-// ==========================================================
+if (!function_exists('check_report')) {
+    function check_report($id, $type = 'service_report') {
+        $CI = &get_instance();
+        $CI->load->model('bizit_services_msl/requests_model');
+        $CI->load->model('bizit_services_msl/reports_model');
+        if( $type == 'service_report') { return $CI->requests_model->get_report_check($id); } 
+        else if( $type == 'field_report') { return $CI->reports_model->get_field_report_check($id); }
+        return null;
+    }
+}
 
 if (!function_exists('rental_agreement_notifications')) {
-    function rental_agreement_notifications($to_staff_id, $from_user_id, $code, $type, $site_name)
-    {
-        $CI = &get_instance();
-        $description = '';
-        $link = 'services/view_rental_agreement/' . $code;
-
-        if ($type == 'field_operator_notice') {
-            $description = _l('not_field_operator_assigned', [$site_name]);
-        } elseif ($type == 'field_operator_removal_notice') {
-            $description = _l('not_field_operator_removed', [$site_name]);
-        }
-
-        if ($description != '') {
-            add_notification([
-                'description' => $description,
-                'touserid' => $to_staff_id,
-                'fromuserid' => $from_user_id,
-                'link' => $link,
-            ]);
-        }
+    function rental_agreement_notifications($to_staff_id, $from_user_id, $code, $type, $site_name) {
+        $CI = &get_instance(); $description = ''; $link = 'services/view_rental_agreement/' . $code;
+        if ($type == 'field_operator_notice') $description = _l('not_field_operator_assigned', [$site_name]);
+        elseif ($type == 'field_operator_removal_notice') $description = _l('not_field_operator_removed', [$site_name]);
+        if ($description != '') add_notification(['description' => $description, 'touserid' => $to_staff_id, 'fromuserid' => $from_user_id, 'link' => $link]);
     }
 }
 
 if (!function_exists('rental_agreement_report_notifications')) {
-    function rental_agreement_report_notifications($to_staff_id, $from_user_id, $code, $type, $site_name, $is_staff = true)
-    {
-        $CI = &get_instance();
-        $description = '';
-        $link = 'services/field_report/view/' . $code;
-
-        if ($type == 'approval_notice') {
-            $description = _l('not_report_approval_request', [$site_name]);
-        } elseif ($type == 'field_report_approved') {
-            $description = _l('not_report_approved', [$site_name]);
-        } elseif ($type == 'field_report_rejected') {
-            $description = _l('not_report_rejected', [$site_name]);
-        }
-
-        if ($description != '') {
-            add_notification([
-                'description' => $description,
-                'touserid' => $to_staff_id,
-                'fromuserid' => $from_user_id,
-                'link' => $link,
-            ]);
-        }
+    function rental_agreement_report_notifications($to_staff_id, $from_user_id, $code, $type, $site_name, $is_staff = true) {
+        $CI = &get_instance(); $description = ''; $link = 'services/field_report/view/' . $code;
+        if ($type == 'approval_notice') $description = _l('not_report_approval_request', [$site_name]);
+        elseif ($type == 'field_report_approved') $description = _l('not_report_approved', [$site_name]);
+        elseif ($type == 'field_report_rejected') $description = _l('not_report_rejected', [$site_name]);
+        if ($description != '') add_notification(['description' => $description, 'touserid' => $to_staff_id, 'fromuserid' => $from_user_id, 'link' => $link]);
     }
 }
