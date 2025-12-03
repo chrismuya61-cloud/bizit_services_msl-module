@@ -5,7 +5,7 @@ $aColumns = [
     'clientid',
     'start_date',
     'end_date',
-    'received_by', // Original column requested
+    'received_by',
     'status'
 ];
 
@@ -16,8 +16,14 @@ $join = [
     'LEFT JOIN ' . db_prefix() . 'staff ON ' . db_prefix() . 'staff.staffid = ' . db_prefix() . 'service_rental_agreement.received_by'
 ];
 
-// V3 FILTERS
 $where = [];
+
+// --- PERMISSION FILTER ---
+if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view') && has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view_own')) {
+    array_push($where, 'AND ' . db_prefix() . 'service_rental_agreement.received_by = ' . get_staff_user_id());
+}
+// -------------------------
+
 if ($this->ci->input->post('from_date')) {
     array_push($where, 'AND start_date >= "' . to_sql_date($this->ci->input->post('from_date')) . '"');
 }
@@ -35,7 +41,7 @@ foreach ($rResult as $aRow) {
     $row = [];
     
     // Code
-    $row[] = '<a href="' . admin_url('services/view_rental_agreement/' . $aRow['service_rental_agreement_code']) . '">' . get_option('service_rental_agreement_prefix') . $aRow['service_rental_agreement_code'] . '</a>';
+    $row[] = '<a href="' . admin_url('services/view_rental_agreement/' . $aRow['service_rental_agreement_code']) . '" class="bold">' . get_option('service_rental_agreement_prefix') . $aRow['service_rental_agreement_code'] . '</a>';
     
     // Client
     $row[] = '<a href="' . admin_url('clients/client/' . $aRow['clientid']) . '">' . $aRow['company'] . '</a>';
@@ -44,29 +50,32 @@ foreach ($rResult as $aRow) {
     $row[] = _d($aRow['start_date']);
     $row[] = _d($aRow['end_date']);
 
-    // Received By
+    // Received By (With Avatar)
     $staffName = $aRow['firstname'] . ' ' . $aRow['lastname'];
-    $row[] = '<a href="' . admin_url('staff/member/' . $aRow['received_by']) . '">' . $staffName . '</a>';
+    $staffPic = staff_profile_image($aRow['received_by'], ['staff-profile-image-small', 'mright5']);
+    $row[] = $staffPic . '<a href="' . admin_url('staff/member/' . $aRow['received_by']) . '">' . $staffName . '</a>';
 
-    // Status (Original Logic Restored)
+    // Status (Modern Badges)
     $status = '';
     if ($aRow['status'] == 0) {
-        $status = '<span class="label label-warning">Pending Rental</span>';
+        $status = '<span class="label label-warning">Pending</span>';
     } elseif ($aRow['status'] == 1) {
-        $status = '<span class="label label-danger">Canceled Rental</span>';
+        $status = '<span class="label label-danger">Canceled</span>';
     } elseif ($aRow['status'] == 3) {
-        $status = '<span class="label label-primary">Pending-partially-paid</span>';
+        $status = '<span class="label label-info">Partial Payment</span>';
     } else {
-        $status = '<span class="label label-success">Paid Rental</span>';
+        $status = '<span class="label label-success">Paid</span>';
     }
     $row[] = $status;
 
     // Options
-    $options = icon_btn('services/view_rental_agreement/' . $aRow['service_rental_agreement_code'], 'eye', 'btn-success');
+    $options = icon_btn('services/view_rental_agreement/' . $aRow['service_rental_agreement_code'], 'eye', 'btn-default');
     
-    // Only allow edit if not invoiced (Original Rule)
-    if (empty($aRow['invoice_rel_id']) && has_permission(BIZIT_SERVICES_MSL.'_rental_agreement', '', 'edit')) {
-        $options .= icon_btn('services/new_rental_agreement/1/' . $aRow['service_rental_agreement_code'], 'pencil-square-o', 'btn-default');
+    // Edit Permission
+    if (has_permission(BIZIT_SERVICES_MSL.'_rental_agreement', '', 'edit')) {
+        if (empty($aRow['invoice_rel_id'])) {
+            $options .= icon_btn('services/new_rental_agreement/1/' . $aRow['service_rental_agreement_code'], 'pencil-square-o', 'btn-default');
+        }
     }
     
     $options .= icon_btn('services/rental_agreement_pdf/' . $aRow['service_rental_agreement_code'], 'file-pdf-o', 'btn-info');
