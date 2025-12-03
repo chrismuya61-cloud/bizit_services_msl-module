@@ -6,7 +6,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 $lang['als_services'] = 'Services Management';
 $lang['als_services_calibration'] = 'Calibration';
 $lang['als_services_for_hire'] = 'Rental Agreements';
-$lang['als_services_warranty'] = 'Service Warranty'; // Retained for legacy support
+$lang['als_services_warranty'] = 'Service Warranty';
 $lang['als_services_repairs'] = 'Repairs';
 $lang['als_services_requests'] = 'Service Requests';
 $lang['als_services_sales_list'] = 'Sales List';
@@ -67,7 +67,7 @@ $lang['field_report_dateadded'] = 'Date Added';
 $lang['approved_by'] = 'Approved By';
 $lang['submitted_by'] = 'Submitted By';
 
-# Survey / Additional Info (Restored from Original)
+# Survey / Additional Info
 $lang['general_info'] = 'General Info';
 $lang['survey_info'] = 'Survey Info';
 $lang['survey_type'] = 'Type of Survey';
@@ -90,15 +90,13 @@ $lang['invoice_services'] = 'Services';
 $lang['invoice_product_sales'] = 'Products';
 $lang['add_product'] = 'Add Another Product';
 
-# V3 Features: Compensation & Dashboard
+# V3 Features
 $lang['staff_compensation_rates'] = 'Staff Compensation Rates';
 $lang['reports_dashboard'] = 'Performance Dashboard';
 $lang['cal_overdue'] = 'Overdue Calibrations';
 $lang['cal_approaching'] = 'Approaching Calibrations';
 $lang['rental_open'] = 'Active Rentals';
 $lang['report_draft'] = 'Draft Reports';
-
-# V3 Features: Client Review
 $lang['service_review'] = 'Service Review';
 $lang['rating'] = 'Rating';
 $lang['thank_you_feedback'] = 'Thank you for your feedback!';
@@ -109,8 +107,6 @@ $lang['inventory_checklist'] = 'Inventory Checklist';
 $lang['filename'] = 'File Name';
 $lang['type'] = 'Type';
 $lang['date_added'] = 'Date Added';
-
-// ... [Existing code] ...
 
 # Notifications (Restored for V3)
 $lang['not_field_operator_assigned'] = 'You have been assigned as a Field Operator for %s';
