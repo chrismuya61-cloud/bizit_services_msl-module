@@ -13,26 +13,16 @@ class Services extends ClientsController
         $this->load->library('bizit_services_msl/Dpdf');
     }
 
-    public function index()
-    {
-        show_404();
-    }
+    public function index() { show_404(); }
 
-    /**
-     * View Calibration Certificate
-     */
     public function certificate($flag_or_code = null, $legacy_code = null)
     {
         $code = ($legacy_code) ? $legacy_code : $flag_or_code;
-        
         if (empty($code)) show_404();
-
         $data['service_request'] = $this->requests_model->get_request($code);
         if (!$data['service_request']) show_404();
-        
         $data['calibration_info'] = $this->requests_model->get_report_check($data['service_request']->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($data['service_request']->clientid);
-
         $this->app_scripts->theme('sticky-js', 'assets/plugins/sticky/sticky.js');
         $data['title'] = 'Certificate Verification';
         $this->data($data);
@@ -40,73 +30,33 @@ class Services extends ClientsController
         $this->layout();
     }
     
-    /**
-     * View/Download Calibration Report
-     */
     public function report($flag = null, $code = null)
     {
-        if(empty($code) && !empty($flag)) {
-            $code = $flag;
-            $flag = 'view';
-        }
+        if(empty($code) && !empty($flag)) { $code = $flag; $flag = 'view'; }
         if(empty($code)) show_404();
-        
         $req = $this->requests_model->get_request($code);
         if(!$req) show_404();
-        
         $data['service_request'] = $req;
         $data['service_info'] = $req; 
         $data['calibration_info'] = $this->requests_model->get_report_check($req->service_request_id);
         $data['service_request_client'] = $this->clients_model->get($req->clientid);
         $data['service_request_code'] = $code;
 
-        // --- RESTORED PDF LOGIC ---
         if ($flag == 'pdf') {
-            $request_number = get_option('service_request_prefix') . $code;
-            
-            $qr_data = "This Service Report Registration No. REQ-{$code} is a valid report from Measurement Systems Ltd.";
-            $params['data'] = $qr_data;
-            $params['level'] = 'L';
-            $params['size'] = 2;
-            $qr_image_path = FCPATH . 'uploads/temp/' . $code . '_qrcode.png';
-            if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
-            $params['savename'] = $qr_image_path;
-            $this->ciqrcode->generate($params);
-            
-            $data['qr_code_base64'] = base64_encode(file_get_contents($qr_image_path));
-            @unlink($qr_image_path);
-
-            try {
-                $pdf = service_request_report_pdf($data);
-                $pdf->Output('SERVICE REPORT ' . mb_strtoupper(slug_it($request_number)) . '.pdf', 'I');
-            } catch (Exception $e) {
-                log_message('error', 'PDF Error: ' . $e->getMessage());
-                show_error('Error generating PDF');
-            }
-            die;
+            $this->generate_pdf($code, get_option('service_request_prefix'), $data, 'service_request_report_pdf');
         }
-        // --------------------------
-
         $data['title'] = 'Calibration Report';
         $this->data($data);
         $this->view('client/report_calibration_view');
         $this->layout();
     }
 
-    /**
-     * View/Download Field Report
-     */
     public function field_report($flag = null, $code = null)
     {
-        if(empty($code) && !empty($flag) && $flag != 'view' && $flag != 'pdf') {
-            $code = $flag;
-            $flag = 'view';
-        }
+        if(empty($code) && !empty($flag) && $flag != 'view' && $flag != 'pdf') { $code = $flag; $flag = 'view'; }
         if (empty($code)) show_404();
-
         $report = $this->reports_model->get_field_report($code);
         if (!$report) show_404();
-
         $data['field_report_info'] = $report;
         $agreement = $this->db->where('service_rental_agreement_id', $report->service_rental_agreement_id)->get('tblservice_rental_agreement')->row();
         $data['service_rental_agreement'] = $agreement;
@@ -118,37 +68,27 @@ class Services extends ClientsController
             ->where('service_rental_agreement_id', $report->service_rental_agreement_id)
             ->get()->result();
 
-        // --- RESTORED PDF LOGIC ---
         if ($flag == 'pdf') {
-            $request_number = get_option('service_rental_agreement_prefix') . $code;
-            
-            $qr_data = "This Rental Agreement Report Registration No. ARG-{$code} is a valid report from Measurement Systems Ltd.";
-            $params['data'] = $qr_data;
-            $params['level'] = 'L';
-            $params['size'] = 2;
-            $qr_image_path = FCPATH . 'uploads/temp/' . $code . '_field_qr.png';
-            if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
-            $params['savename'] = $qr_image_path;
-            $this->ciqrcode->generate($params);
-            
-            $data['qr_code_base64'] = base64_encode(file_get_contents($qr_image_path));
-            @unlink($qr_image_path);
-
-            try {
-                $pdf = service_rental_agreement_pdf($data);
-                $pdf->Output('RENTAL FIELD REPORT ' . mb_strtoupper(slug_it($request_number)) . '.pdf', 'I');
-            } catch (Exception $e) {
-                log_message('error', 'PDF Error: ' . $e->getMessage());
-                show_error('Error generating PDF');
-            }
-            die;
+            $this->generate_pdf($code, get_option('service_rental_agreement_prefix'), $data, 'service_rental_agreement_pdf');
         }
-        // --------------------------
-
         $this->app_scripts->theme('sticky-js', 'assets/plugins/sticky/sticky.js');
         $data['title'] = 'Field Report View';
         $this->data($data);
         $this->view('client/field_report_view');
         $this->layout();
+    }
+
+    private function generate_pdf($code, $prefix, $data, $pdf_func) {
+        $qr_data = "Report No. {$prefix}{$code} - Valid MSL Document.";
+        $params['data'] = $qr_data; $params['level'] = 'L'; $params['size'] = 2;
+        $qr_image_path = FCPATH . 'uploads/temp/' . $code . '_qr.png';
+        if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
+        $params['savename'] = $qr_image_path;
+        $this->ciqrcode->generate($params);
+        $data['qr_code_base64'] = base64_encode(file_get_contents($qr_image_path));
+        @unlink($qr_image_path);
+        $pdf = $pdf_func($data);
+        $pdf->Output('REPORT_' . $code . '.pdf', 'I');
+        die;
     }
 }
