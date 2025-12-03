@@ -20,7 +20,6 @@ class Requests_model extends App_Model {
     public function get_checklist_data($id) { return $this->db->where('service_request_id', $id)->get('tblchecklist1')->result_array(); }
     public function get_collection_data($id) { return $this->db->where('service_request_id', $id)->get('tblcollection1')->row(); }
     
-    // --- RESTORED LEGACY FUNCTION ---
     public function delete_inspection_item($service_request_id, $inspection_item, $inspection_type) {
         $this->db->where('service_request_id', $service_request_id);
         $this->db->where('inspection_item', $inspection_item);
@@ -35,7 +34,6 @@ class Requests_model extends App_Model {
     public function get_service_files($id) { $r=$this->db->where('service_request_id', $id)->get('tblservice_request')->row(); return $r ? json_decode($r->report_files, true) : []; }
     public function get_gps_details() { return $this->db->get('tblgps_data')->result_array(); }
     
-    // GPS Insert Logic
     public function add_gps_data($data) {
         $data['staffid'] = get_staff_user_id();
         $data['date_recorded'] = date('Y-m-d H:i:s');
@@ -43,21 +41,12 @@ class Requests_model extends App_Model {
         return $this->db->insert_id();
     }
 
-    // --- ENHANCED: SERVICE CALENDAR DATA ---
+    // --- RESTORED CALENDAR DATA ---
     public function get_calendar_service_details() {
-        return $this->db->select('
-                r.service_request_id,
-                r.drop_off_date as start_date, 
-                r.collection_date as end_date, 
-                r.service_request_code,
-                r.item_type as name, 
-                r.serial_no,
-                r.status,
-                c.company as client_name
-            ')
+        return $this->db->select('r.service_request_id, r.drop_off_date as start_date, r.collection_date as end_date, r.service_request_code, r.item_type as name, r.serial_no, r.status, c.company as client_name')
             ->from('tblservice_request r')
             ->join('tblclients c', 'c.userid = r.clientid', 'left')
-            ->where('r.status !=', 3) // Assuming 3 is Cancelled
+            ->where('r.status !=', 3)
             ->get()->result();
     }
 }
