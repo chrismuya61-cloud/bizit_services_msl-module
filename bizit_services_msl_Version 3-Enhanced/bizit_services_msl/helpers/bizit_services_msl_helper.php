@@ -52,7 +52,6 @@ if (!function_exists('_raise_service_invoices')) {
         $service_request = $CI->db->where('request_code', $code)->get($request_table)->row();
         $qty_amt = 1;
 
-        // Restored V1 Logic for Licenses/Time
         if (isset($service_request->hours) && isset($service_request->licences)) {
             $time_sub = $service_request->hours;
             if ($service_code == "004-0002") $time_sub = ($service_request->hours / 24);
@@ -60,7 +59,6 @@ if (!function_exists('_raise_service_invoices')) {
             else if ($service_code == "004-0004") $time_sub = ($service_request->hours / 24 / 365);
             $qty_amt = $time_sub * $service_request->licences;
         }
-        
         return true; 
     }
 }
@@ -120,7 +118,6 @@ if (!function_exists('get_next_service_category_code_internal')) {
     }
 }
 
-// PDF Functions
 if(!function_exists('service_request_pdf')){ 
     function service_request_pdf($data){ 
         $CI=&get_instance(); 
@@ -173,7 +170,7 @@ if(!function_exists('service_request_report_pdf')){
 }
 
 // ==========================================================
-// 4. RESTORED NOTIFICATION FUNCTIONS
+// 4. RESTORED NOTIFICATION FUNCTIONS (REQUIRED)
 // ==========================================================
 
 if (!function_exists('rental_agreement_notifications')) {
