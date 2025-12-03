@@ -61,8 +61,6 @@ if (!function_exists('_raise_service_invoices')) {
             $qty_amt = $time_sub * $service_request->licences;
         }
         
-        // Note: Actual invoice creation logic typically handled in controller in V3,
-        // but this function is kept for compatibility with any external calls.
         return true; 
     }
 }
@@ -122,15 +120,13 @@ if (!function_exists('get_next_service_category_code_internal')) {
     }
 }
 
-// PDF Functions - Now pointing to the correct libraries
+// PDF Functions
 if(!function_exists('service_request_pdf')){ 
     function service_request_pdf($data){ 
         $CI=&get_instance(); 
         $CI->load->library(BIZIT_SERVICES_MSL.'/pdf');
         $pdf = new Pdf('P', 'mm', 'A4', true, 'UTF-8', false);
         $pdf->SetTitle('Service Request');
-        // Load View via PDF Library helper or direct view loading if not using Wonder PDF
-        // For V3 we use the Wonder PDF integration primarily, but this is the fallback/core logic
         $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_requestpdf', $data); 
         return $pdf;
     } 
@@ -174,4 +170,58 @@ if(!function_exists('service_request_report_pdf')){
         $pdf->load_view('wonder_pdf_template/pdf/gamma/my_service_request_reportpdf', $data); 
         return $pdf;
     } 
+}
+
+// ==========================================================
+// 4. RESTORED NOTIFICATION FUNCTIONS
+// ==========================================================
+
+if (!function_exists('rental_agreement_notifications')) {
+    function rental_agreement_notifications($to_staff_id, $from_user_id, $code, $type, $site_name)
+    {
+        $CI = &get_instance();
+        $description = '';
+        $link = 'services/view_rental_agreement/' . $code;
+
+        if ($type == 'field_operator_notice') {
+            $description = _l('not_field_operator_assigned', [$site_name]);
+        } elseif ($type == 'field_operator_removal_notice') {
+            $description = _l('not_field_operator_removed', [$site_name]);
+        }
+
+        if ($description != '') {
+            add_notification([
+                'description' => $description,
+                'touserid' => $to_staff_id,
+                'fromuserid' => $from_user_id,
+                'link' => $link,
+            ]);
+        }
+    }
+}
+
+if (!function_exists('rental_agreement_report_notifications')) {
+    function rental_agreement_report_notifications($to_staff_id, $from_user_id, $code, $type, $site_name, $is_staff = true)
+    {
+        $CI = &get_instance();
+        $description = '';
+        $link = 'services/field_report/view/' . $code;
+
+        if ($type == 'approval_notice') {
+            $description = _l('not_report_approval_request', [$site_name]);
+        } elseif ($type == 'field_report_approved') {
+            $description = _l('not_report_approved', [$site_name]);
+        } elseif ($type == 'field_report_rejected') {
+            $description = _l('not_report_rejected', [$site_name]);
+        }
+
+        if ($description != '') {
+            add_notification([
+                'description' => $description,
+                'touserid' => $to_staff_id,
+                'fromuserid' => $from_user_id,
+                'link' => $link,
+            ]);
+        }
+    }
 }
