@@ -11,7 +11,6 @@
             }
             ?>
          </div>
-         <!--  When invoicing from project area the expenses are not visible here because you can select to bill expenses while trying to invoice project -->
          <?php if (!isset($invoice_from_project)) { ?>
             <div id="expenses_to_bill" class="col-md-6">
                <?php if (isset($invoice) && $invoice->status != Invoices_model::STATUS_CANCELLED) {
@@ -476,6 +475,13 @@
           $this->load->view('admin/invoices/bizit_invoices/tasks');
            ?>
       </div>
+
+      <div class="row">
+         <div class="col-md-12 mbot10 text-right">
+            <button type="button" class="btn btn-info btn-xs" onclick="add_section_header();"><i class="fa fa-plus"></i> Add Section Header</button>
+         </div>
+      </div>
+
       <?php if (isset($invoice_from_project)) {
          echo '<hr class="no-mtop" />';
       } ?>
@@ -561,56 +567,79 @@
                   foreach ($add_items as $item) {
 
                      $manual    = false;
-                     $table_row = '<tr class="sortable item">';
-                     $table_row .= '<td class="dragger">';
-                     if (!is_numeric($item['qty'])) {
-                        $item['qty'] = 1;
-                     }
-                     $invoice_item_taxes = get_invoice_item_taxes($item['id']);
-                     // passed like string
-                     if ($item['id'] == 0) {
-                        $invoice_item_taxes = $item['taxname'];
-                        $manual             = true;
-                     }
-                     $table_row .= form_hidden('' . $items_indicator . '[' . $i . '][itemid]', $item['id']);
-                     $amount = $item['rate'] * $item['qty'];
-                     $amount = app_format_number($amount);
-                     // order input
-                     $table_row .= '<input type="hidden" class="order" name="' . $items_indicator . '[' . $i . '][order]">';
-                     $table_row .= '</td>';
-                     $table_row .= '<td class="bold description"><textarea name="' . $items_indicator . '[' . $i . '][description]" class="form-control" rows="5">' . clear_textarea_breaks($item['description']) . '</textarea></td>';
-                     $table_row .= '<td><textarea name="' . $items_indicator . '[' . $i . '][long_description]" class="form-control" rows="5">' . clear_textarea_breaks($item['long_description']) . '</textarea></td>';
 
-                     $table_row .= render_custom_fields_items_table_in($item, $items_indicator . '[' . $i . ']');
-
-                     $table_row .= '<td><input type="number" min="0" onblur="calculate_total();" onchange="calculate_total();" data-quantity name="' . $items_indicator . '[' . $i . '][qty]" value="' . $item['qty'] . '" class="form-control">';
-
-                     $unit_placeholder = '';
-                     if (!$item['unit']) {
-                        $unit_placeholder = _l('unit');
-                        $item['unit'] = '';
-                     }
-
-                     $table_row .= '<input type="text" placeholder="' . $unit_placeholder . '" name="' . $items_indicator . '[' . $i . '][unit]" class="form-control input-transparent text-right" value="' . $item['unit'] . '">';
-
-                     $table_row .= '</td>';
-                     $table_row .= '<td class="rate"><input type="number" data-toggle="tooltip" title="' . _l('numbers_not_formatted_while_editing') . '" onblur="calculate_total();" onchange="calculate_total();" name="' . $items_indicator . '[' . $i . '][rate]" value="' . $item['rate'] . '" class="form-control"></td>';
-                     $table_row .= '<td class="taxrate">' . $this->misc_model->get_taxes_dropdown_template('' . $items_indicator . '[' . $i . '][taxname][]', $invoice_item_taxes, 'invoice', $item['id'], true, $manual) . '</td>';
-                     $table_row .= '<td class="amount" align="right">' . $amount . '</td>';
-                     $table_row .= '<td><a href="#" class="btn btn-danger pull-left" onclick="delete_item(this,' . $item['id'] . '); return false;"><i class="fa fa-times"></i></a></td>';
-                     if (isset($item['task_id'])) {
-                        if (!is_array($item['task_id'])) {
-                           $table_row .= form_hidden('billed_tasks[' . $i . '][]', $item['task_id']);
-                        } else {
-                           foreach ($item['task_id'] as $task_id) {
-                              $table_row .= form_hidden('billed_tasks[' . $i . '][]', $task_id);
-                           }
+                     // Check for Section Header Flag
+                     if(isset($item['unit']) && $item['unit'] == 'SECTION') {
+                         // RENDER HEADER ROW
+                         $total_columns = 8 + count($custom_fields); // Dragger + Fields + Actions
+                         $colspan = $total_columns - 1; 
+                         
+                         echo '<tr class="sortable item section-header-row" style="background-color: #f8f9fa;">';
+                         echo '<td class="dragger">';
+                         echo form_hidden('' . $items_indicator . '[' . $i . '][itemid]', $item['id']);
+                         echo '<input type="hidden" class="order" name="' . $items_indicator . '[' . $i . '][order]">';
+                         echo '</td>';
+                         echo '<td colspan="'.$colspan.'" class="bold">';
+                         echo '<input type="text" name="' . $items_indicator . '[' . $i . '][description]" class="form-control" style="font-weight:bold; font-size:14px; background:transparent; border:none; border-bottom:1px solid #ddd;" value="' . clear_textarea_breaks($item['description']) . '">';
+                         echo '<input type="hidden" name="' . $items_indicator . '[' . $i . '][unit]" value="SECTION">';
+                         echo '<input type="hidden" name="' . $items_indicator . '[' . $i . '][qty]" value="0">';
+                         echo '<input type="hidden" name="' . $items_indicator . '[' . $i . '][rate]" value="0">';
+                         echo '</td>';
+                         echo '<td><a href="#" class="btn btn-danger pull-left" onclick="delete_item(this,' . $item['id'] . '); return false;"><i class="fa fa-times"></i></a></td>';
+                         echo '</tr>';
+                     } else {
+                        // RENDER STANDARD ROW
+                        $table_row = '<tr class="sortable item">';
+                        $table_row .= '<td class="dragger">';
+                        if (!is_numeric($item['qty'])) {
+                           $item['qty'] = 1;
                         }
-                     } else if (isset($item['expense_id'])) {
-                        $table_row .= form_hidden('billed_expenses[' . $i . '][]', $item['expense_id']);
+                        $invoice_item_taxes = get_invoice_item_taxes($item['id']);
+                        // passed like string
+                        if ($item['id'] == 0) {
+                           $invoice_item_taxes = $item['taxname'];
+                           $manual             = true;
+                        }
+                        $table_row .= form_hidden('' . $items_indicator . '[' . $i . '][itemid]', $item['id']);
+                        $amount = $item['rate'] * $item['qty'];
+                        $amount = app_format_number($amount);
+                        // order input
+                        $table_row .= '<input type="hidden" class="order" name="' . $items_indicator . '[' . $i . '][order]">';
+                        $table_row .= '</td>';
+                        $table_row .= '<td class="bold description"><textarea name="' . $items_indicator . '[' . $i . '][description]" class="form-control" rows="5">' . clear_textarea_breaks($item['description']) . '</textarea></td>';
+                        $table_row .= '<td><textarea name="' . $items_indicator . '[' . $i . '][long_description]" class="form-control" rows="5">' . clear_textarea_breaks($item['long_description']) . '</textarea></td>';
+
+                        $table_row .= render_custom_fields_items_table_in($item, $items_indicator . '[' . $i . ']');
+
+                        $table_row .= '<td><input type="number" min="0" onblur="calculate_total();" onchange="calculate_total();" data-quantity name="' . $items_indicator . '[' . $i . '][qty]" value="' . $item['qty'] . '" class="form-control">';
+
+                        $unit_placeholder = '';
+                        if (!$item['unit']) {
+                           $unit_placeholder = _l('unit');
+                           $item['unit'] = '';
+                        }
+
+                        $table_row .= '<input type="text" placeholder="' . $unit_placeholder . '" name="' . $items_indicator . '[' . $i . '][unit]" class="form-control input-transparent text-right" value="' . $item['unit'] . '">';
+
+                        $table_row .= '</td>';
+                        $table_row .= '<td class="rate"><input type="number" data-toggle="tooltip" title="' . _l('numbers_not_formatted_while_editing') . '" onblur="calculate_total();" onchange="calculate_total();" name="' . $items_indicator . '[' . $i . '][rate]" value="' . $item['rate'] . '" class="form-control"></td>';
+                        $table_row .= '<td class="taxrate">' . $this->misc_model->get_taxes_dropdown_template('' . $items_indicator . '[' . $i . '][taxname][]', $invoice_item_taxes, 'invoice', $item['id'], true, $manual) . '</td>';
+                        $table_row .= '<td class="amount" align="right">' . $amount . '</td>';
+                        $table_row .= '<td><a href="#" class="btn btn-danger pull-left" onclick="delete_item(this,' . $item['id'] . '); return false;"><i class="fa fa-times"></i></a></td>';
+                        if (isset($item['task_id'])) {
+                           if (!is_array($item['task_id'])) {
+                              $table_row .= form_hidden('billed_tasks[' . $i . '][]', $item['task_id']);
+                           } else {
+                              foreach ($item['task_id'] as $task_id) {
+                                 $table_row .= form_hidden('billed_tasks[' . $i . '][]', $task_id);
+                              }
+                           }
+                        } else if (isset($item['expense_id'])) {
+                           $table_row .= form_hidden('billed_expenses[' . $i . '][]', $item['expense_id']);
+                        }
+                        $table_row .= '</tr>';
+                        echo $table_row;
                      }
-                     $table_row .= '</tr>';
-                     echo $table_row;
                      $i++;
                   }
                }
