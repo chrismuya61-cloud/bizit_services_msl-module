@@ -84,4 +84,20 @@ class Services_core_model extends App_Model {
         }
         return ['html' => $html];
     }
+
+    // --- GPS DATA SUPPORT (RESTORED) ---
+    public function get_gps_details() {
+        if ($this->db->table_exists('tblgps_data')) {
+            return $this->db->get('tblgps_data')->result();
+        }
+        return [];
+    }
+
+    public function insert_gps_data($data) {
+        if ($this->db->table_exists('tblgps_data')) {
+            $this->db->insert('tblgps_data', $data);
+            return $this->db->insert_id();
+        }
+        return false;
+    }
 }
