@@ -115,7 +115,6 @@ class Services extends AdminController
         if (has_permission(BIZIT_SERVICES_MSL, '', 'view')) {
             if ($this->input->post()) {
                 $data = $this->input->post();
-                // Auto-generate code if missing
                 if (empty($data['type_code'])) {
                      $count = $this->db->count_all('tblservice_type');
                      $data['type_code'] = sprintf("%03d", $count + 1);
@@ -233,7 +232,6 @@ class Services extends AdminController
         redirect(admin_url('services/view_request/' . $data['service_request_code']));
     }
 
-    // --- RESTORED: DELETE SERVICE ITEM ---
     public function delete_service_price($id, $code)
     {
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
@@ -273,7 +271,6 @@ class Services extends AdminController
         $this->load->view('admin/services/view_request', $data);
     }
 
-    // --- RESTORED: STATUS CONFIRMATION ---
     public function service_re_confirmation()
     {
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
@@ -282,7 +279,6 @@ class Services extends AdminController
         $id = $this->input->post('service_request_id', true);
         $code = $this->input->post('service_request_code', true);
 
-        // Directly update status via model or DB
         $this->db->where('service_request_id', $id)->update('tblservice_request', ['status' => $data['status']]);
         
         set_alert('success', 'Status updated successfully');
@@ -514,7 +510,6 @@ class Services extends AdminController
         redirect(admin_url('services/new_rental_agreement/1/' . $data['service_rental_agreement_code']));
     }
 
-    // --- RESTORED: DELETE RENTAL ITEM ---
     public function delete_service_rental_agreement_price($id, $code)
     {
         if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
@@ -552,7 +547,6 @@ class Services extends AdminController
         $this->load->view('admin/services/view_rental_agreement', $data);
     }
 
-    // --- RESTORED: RENTAL STATUS CONFIRMATION ---
     public function service_rental_agreement_re_confirmation()
     {
         if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
@@ -569,7 +563,6 @@ class Services extends AdminController
         redirect(admin_url('services/view_rental_agreement/' . $code));
     }
 
-    // --- ENHANCED: DUAL RENTAL+SERVICE CALENDAR ---
     public function rental_calendar()
     {
         // 1. Fetch Rental Data
@@ -670,6 +663,51 @@ class Services extends AdminController
             }
             redirect(admin_url('services/field_report/edit/' . $data['report_code']));
         }
+    }
+
+    // --- RESTORED: AJAX FILE TAB SUPPORT ---
+    public function upload_file($type, $type_id, $upload = false)
+    {
+        $data['report_code'] = '';
+        // If this is a field report, fetch code for potential usage
+        if($type == 'field_report') {
+             $data['report_code'] = $this->db->select('report_code')->where('field_report_id', $type_id)->get('tblfield_report')->row('report_code');
+        }
+        
+        if (!$upload) {
+            if ($this->input->is_ajax_request()) {
+                $this->load->view('admin/services/report_files', $data);
+            }
+        } else {
+            handle_service_report_attachments($type, $type_id);
+        }
+    }
+
+    public function manage_files($type, $type_id)
+    {
+        if ($this->input->is_ajax_request()) {
+            $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_report_files'), array('type' => $type, 'type_id' => $type_id));
+        }
+    }
+
+    public function delete_file($id, $type)
+    {
+        $this->db->where('id', $id);
+        $this->db->where('rel_type', $type);
+        $file = $this->db->get('tblfiles')->row();
+        $success = false;
+        
+        if ($file && ($file->staffid == get_staff_user_id() || is_admin())) {
+            $this->db->where('id', $id)->delete('tblfiles');
+            $path = FCPATH . 'modules/bizit_services_msl/uploads/reports/' . $file->file_name;
+            if(file_exists($path)) unlink($path);
+            $success = true;
+        }
+
+        echo json_encode([
+            'success' => $success,
+            'message' => $success ? _l('deleted') : _l('problem_deleting'),
+        ]);
     }
 
     public function delete_field_report($id, $code)
@@ -838,26 +876,6 @@ class Services extends AdminController
         
         $pdf = inventory_checklist_pdf($data);
         $pdf->Output('CHECKLIST.pdf', 'I');
-    }
-
-    public function delete_file($id, $type)
-    {
-        $this->db->where('id', $id);
-        $this->db->where('rel_type', $type);
-        $file = $this->db->get('tblfiles')->row();
-        $success = false;
-        
-        if ($file && ($file->staffid == get_staff_user_id() || is_admin())) {
-            $this->db->where('id', $id)->delete('tblfiles');
-            $path = FCPATH . 'modules/bizit_services_msl/uploads/reports/' . $file->file_name;
-            if(file_exists($path)) unlink($path);
-            $success = true;
-        }
-
-        echo json_encode([
-            'success' => $success,
-            'message' => $success ? _l('deleted') : _l('problem_deleting'),
-        ]);
     }
 
     public function gpsDetails()
