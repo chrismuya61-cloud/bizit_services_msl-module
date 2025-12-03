@@ -21,46 +21,31 @@ class Services extends AdminController
         // Load Helpers & Libraries
         $this->load->helper(['bizit_services_msl', 'invoices', 'number']);
         $this->load->library('ciqrcode');
-        // Load Dpdf for Certificates (Restored from V1)
         $this->load->library('bizit_services_msl/Dpdf');
     }
 
     // ==========================================================
-    //  1. AJAX UTILITIES (CRITICAL FOR JS AUTOMATION)
+    //  1. AJAX UTILITIES
     // ==========================================================
 
-    /**
-     * Used by JS to auto-generate the next Service Code based on Category
-     */
     public function getNextServiceCode($type_code)
     {
         if (!$this->input->is_ajax_request()) show_404();
-        
-        // Logic: Count items in this category + 1, formatted as CODE-000X
         $count = $this->db->where('service_type_code', $type_code)->count_all_results('tblservices_module');
-        $next = $count + 1;
-        echo sprintf("%s-%04d", $type_code, $next);
+        echo sprintf("%s-%04d", $type_code, $count + 1);
     }
 
-    /**
-     * Used by Invoice Page JS to populate "Service" dropdown
-     */
     public function get_services($type_code)
     {
         if (!$this->input->is_ajax_request()) show_404();
-        $services = $this->services_core_model->get_all_services($type_code);
-        echo json_encode($services);
+        echo json_encode($this->services_core_model->get_all_services($type_code));
     }
 
-    /**
-     * Used by Invoice Page JS to auto-fill Description & Price
-     */
     public function get_service_by_code($code)
     {
         if (!$this->input->is_ajax_request()) show_404();
         $service = $this->services_core_model->get_service_by_code($code);
         if($service) {
-            // Fetch category name for description
             $cat = $this->db->where('type_code', $service->service_type_code)->get('tblservice_type')->row();
             $service->category_name = $cat ? $cat->name : '';
         }
@@ -109,18 +94,10 @@ class Services extends AdminController
         redirect(admin_url('services'));
     }
 
-    /**
-     * Delete Category (Restored from V1)
-     */
     public function delete_category($id)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) {
-            access_denied('Services');
-        }
-
-        if (!$id) {
-            redirect(admin_url('services'));
-        }
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) access_denied('Services');
+        if (!$id) redirect(admin_url('services'));
 
         $response = $this->services_core_model->delete_category($id);
         if (is_array($response) && isset($response['referenced'])) {
@@ -138,7 +115,11 @@ class Services extends AdminController
         if (has_permission(BIZIT_SERVICES_MSL, '', 'view')) {
             if ($this->input->post()) {
                 $data = $this->input->post();
-                if (empty($data['type_code'])) $data['type_code'] = get_next_service_category_code_internal();
+                // Auto-generate code if missing
+                if (empty($data['type_code'])) {
+                     $count = $this->db->count_all('tblservice_type');
+                     $data['type_code'] = sprintf("%03d", $count + 1);
+                }
                 
                 if (empty($data['service_typeid'])) {
                     if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Services');
@@ -200,7 +181,6 @@ class Services extends AdminController
                 $data[$f] = $data['request']->$f;
             }
             
-            // Inspections
             $inspections = $this->requests_model->get_inspection_data($data['request']->service_request_id);
             $data['pre_inspection_items'] = []; $data['post_inspection_items'] = [];
             foreach ($inspections as $i) {
@@ -222,22 +202,18 @@ class Services extends AdminController
         $id = isset($data['edit_id']) && $data['edit_id'] ? $this->requests_model->edit_request($data) : $this->requests_model->add_request($data);
         $request_id = isset($data['edit_id']) ? $data['edit_id'] : $id;
 
-        // Save Services
         if (isset($data['serviceid'])) {
             for ($i = 0; $i < count($data['serviceid']); $i++) {
                 if ($data['serviceid'][$i]) {
                     $det = ['service_request_id' => $request_id, 'serviceid' => $data['serviceid'][$i], 'price' => $data['service_price'][$i]];
-                    // If editing details logic exists in model, use it, else add
                     $this->requests_model->add_request_details($det);
                 }
             }
         }
 
-        // Save Accessories (Restored Logic)
         $submitted_accessories = isset($data['accessoryserviceid']) ? $data['accessoryserviceid'] : [];
         $submitted_prices = isset($data['accessoryservice_price']) ? $data['accessoryservice_price'] : [];
         
-        // Remove old accessories not in list
         $current_accessories = $this->requests_model->get_request_accessories($request_id);
         $current_ids = array_column($current_accessories, 'accessory_id');
         
@@ -257,6 +233,20 @@ class Services extends AdminController
         redirect(admin_url('services/view_request/' . $data['service_request_code']));
     }
 
+    // --- RESTORED: DELETE SERVICE ITEM ---
+    public function delete_service_price($id, $code)
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+        
+        $deleted = $this->requests_model->delete_request_details($id);
+        if ($deleted) {
+            set_alert('success', 'Successfully deleted service item');
+        } else {
+            set_alert('warning', 'Failed to delete service item');
+        }
+        redirect(admin_url('services/new_request/1/' . $code));
+    }
+
     public function view_request($code)
     {
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'view')) access_denied('Services');
@@ -273,12 +263,9 @@ class Services extends AdminController
             
         $data['service_request_client'] = $this->clients_model->get($data['service_info']->clientid);
         $data['existing_accessories'] = $this->requests_model->get_request_accessories($data['service_info']->service_request_id);
-        
-        // Fetch Checklist & Released Info
         $data['checklist_items'] = $this->requests_model->get_checklist_data($data['service_info']->service_request_id);
         $data['released_info'] = $this->db->where('service_request_id', $data['service_info']->service_request_id)->get('tblcollection1')->row();
 
-        // Pass dropped/received info
         foreach(['dropped_off_by','dropped_off_date','req_received_by','received_date','received_signature'] as $f) {
             $data[$f] = $data['service_info']->$f ?? 'N/A';
         }
@@ -286,9 +273,22 @@ class Services extends AdminController
         $this->load->view('admin/services/view_request', $data);
     }
 
-    /**
-     * Delete Accessory (Restored from V1)
-     */
+    // --- RESTORED: STATUS CONFIRMATION ---
+    public function service_re_confirmation()
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+        
+        $data['status'] = $this->input->post('status', true);
+        $id = $this->input->post('service_request_id', true);
+        $code = $this->input->post('service_request_code', true);
+
+        // Directly update status via model or DB
+        $this->db->where('service_request_id', $id)->update('tblservice_request', ['status' => $data['status']]);
+        
+        set_alert('success', 'Status updated successfully');
+        redirect(admin_url('services/view_request/' . $code));
+    }
+
     public function delete_accessory()
     {
         $id = $this->input->post('id', true);
@@ -356,16 +356,12 @@ class Services extends AdminController
         redirect(admin_url('services/report/edit/' . $data['service_code']));
     }
 
-    /**
-     * Generate Invoice from Service Request (Restored from V1)
-     */
     public function request_invoice_generation($code = null)
     {
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('invoices');
 
         $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
         
-        // Get details
         $service_details = $this->db->select('d.*, m.name, m.service_code, t.name as category_name')
             ->from('tblservice_request_details d')
             ->join('tblservices_module m', 'm.serviceid = d.serviceid')
@@ -373,7 +369,6 @@ class Services extends AdminController
             ->where('d.service_request_id', $service_request->service_request_id)
             ->get()->result();
 
-        // Get accessories
         $accessories = $this->db->select('a.*, i.commodity_name, i.unit')
             ->from('tblservice_request_accessories a')
             ->join('tblitems i', 'i.id = a.accessory_id')
@@ -433,9 +428,6 @@ class Services extends AdminController
         }
     }
 
-    /**
-     * Calibration Certificate PDF (Restored from V1)
-     */
     public function certificate_pdf($code = null)
     {
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'view')) access_denied('Services');
@@ -444,7 +436,6 @@ class Services extends AdminController
         $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
         if (!$service_request) show_error('Service request not found.');
 
-        // QR Code
         $qr_data = site_url('service/certificate/validate/' . $service_request->service_request_code);
         $this->load->library('ciqrcode');
         $params['data'] = $qr_data;
@@ -499,16 +490,13 @@ class Services extends AdminController
         $data['report_files'] = json_encode($this->handle_file_uploads());
         if (empty($data['service_review_token'])) $data['service_review_token'] = md5(uniqid(rand(), true));
 
-        // Get field operator and site name for notifications
         $field_operator_id = $data['field_operator'] ?? null;
         $site_name = $data['site_name'] ?? '';
 
         if (!empty($data['edit_id'])) {
-            // Check for change if editing
             $old_info = $this->rentals_model->get_rental_agreement($data['service_rental_agreement_code']);
             $this->rentals_model->edit_rental_agreement($data);
             
-            // Notify if operator changed
             if ($field_operator_id && $old_info && $old_info->field_operator != $field_operator_id) {
                 if(function_exists('rental_agreement_notifications')) {
                     rental_agreement_notifications($field_operator_id, get_staff_user_id(), $data['service_rental_agreement_code'], 'field_operator_notice', $site_name);
@@ -524,6 +512,18 @@ class Services extends AdminController
             }
         }
         redirect(admin_url('services/new_rental_agreement/1/' . $data['service_rental_agreement_code']));
+    }
+
+    // --- RESTORED: DELETE RENTAL ITEM ---
+    public function delete_service_rental_agreement_price($id, $code)
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
+            access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+        }
+        
+        $this->rentals_model->delete_rental_agreement_details($id);
+        set_alert('success', 'Successfully deleted rental item');
+        redirect(admin_url('services/new_rental_agreement/1/' . $code));
     }
 
     public function view_rental_agreement($code)
@@ -542,7 +542,6 @@ class Services extends AdminController
         $data['service_details'] = $this->rentals_model->get_rental_agreement_details($data['service_info']->service_rental_agreement_id);
         $data['service_rental_agreement_client'] = $this->clients_model->get($data['service_info']->clientid);
         
-        // Calculate days
         $start = new DateTime($data['service_info']->start_date);
         $end = new DateTime($data['service_info']->end_date);
         $interval = $start->diff($end);
@@ -553,28 +552,36 @@ class Services extends AdminController
         $this->load->view('admin/services/view_rental_agreement', $data);
     }
 
-    /**
-     * Rental Calendar (Restored from V1)
-     */
+    // --- RESTORED: RENTAL STATUS CONFIRMATION ---
+    public function service_rental_agreement_re_confirmation()
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
+            access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+        }
+        
+        $data['status'] = $this->input->post('status', true);
+        $id = $this->input->post('service_rental_agreement_id', true);
+        $code = $this->input->post('service_rental_agreement_code', true);
+
+        $this->db->where('service_rental_agreement_id', $id)->update('tblservice_rental_agreement', ['status' => $data['status']]);
+        
+        set_alert('success', 'Rental status updated successfully');
+        redirect(admin_url('services/view_rental_agreement/' . $code));
+    }
+
+    // --- ENHANCED: DUAL RENTAL+SERVICE CALENDAR ---
     public function rental_calendar()
     {
-        // Try to fetch data using a direct DB call if method missing in V3 model, 
-        // ensuring "no syntax errors".
-        // V1 Logic: join tblservice_rental_agreement_details + tblservices_module + client
-        $data['rental_details'] = $this->db->select('a.*, c.company as client_name, d.serviceid, m.name as item_name')
-            ->from('tblservice_rental_agreement a')
-            ->join('tblclients c', 'c.userid = a.clientid')
-            ->join('tblservice_rental_agreement_details d', 'd.service_rental_agreement_id = a.service_rental_agreement_id')
-            ->join('tblservices_module m', 'm.serviceid = d.serviceid')
-            ->get()->result();
+        // 1. Fetch Rental Data
+        $data['rental_details'] = $this->rentals_model->get_calendar_rental_details();
+        
+        // 2. Fetch Service Request Data (New Feature)
+        $data['service_request_details'] = $this->requests_model->get_calendar_service_details();
 
-        $data['title'] = 'Rental Calendar';
+        $data['title'] = 'Operations Calendar';
         $this->load->view('admin/services/rental_agreements_calendar', $data);
     }
 
-    /**
-     * Return Rental Logic (Restored from V1)
-     */
     public function return_rental($code, $invoiceid)
     {
         if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
@@ -589,7 +596,6 @@ class Services extends AdminController
         $this->db->where('service_rental_agreement_code', $code)->update('tblservice_rental_agreement', $data_service);
 
         if ($this->db->affected_rows() > 0) {
-            // Reset Equipment Status to Not-Hired
             $service_ID = $this->db->select('d.serviceid')
                 ->from('tblservice_rental_agreement_details d')
                 ->join('tblservice_rental_agreement a', 'a.service_rental_agreement_id = d.service_rental_agreement_id')
@@ -611,9 +617,6 @@ class Services extends AdminController
         }
     }
 
-    /**
-     * Reassign Field Operator (Restored from V1)
-     */
     public function service_rental_agreement_reasign_field_operator()
     {
         if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
@@ -627,9 +630,7 @@ class Services extends AdminController
 
         if ($this->db->affected_rows() > 0 && function_exists('rental_agreement_notifications')) {
             if ($info->field_operator != $operator_id) {
-                // Notify new
                 rental_agreement_notifications($operator_id, get_staff_user_id(), $info->service_rental_agreement_code, 'field_operator_notice', $info->site_name);
-                // Notify old
                 if ($info->field_operator) {
                     rental_agreement_notifications($info->field_operator, get_staff_user_id(), $info->service_rental_agreement_code, 'field_operator_removal_notice', $info->site_name);
                 }
@@ -671,9 +672,6 @@ class Services extends AdminController
         }
     }
 
-    /**
-     * Delete Field Report (Restored from V1)
-     */
     public function delete_field_report($id, $code)
     {
         $success = $this->reports_model->delete_field_report($id);
@@ -792,7 +790,6 @@ class Services extends AdminController
         $data['service_request_client'] = $this->clients_model->get($data['service_request']->clientid);
         $data['pre_inspection_items'] = [];
         
-        // Populate additional required fields for PDF
         $data['checklist_items'] = $this->requests_model->get_checklist_data($data['service_request']->service_request_id);
         $data['released_info'] = $this->db->where('service_request_id', $data['service_request']->service_request_id)->get('tblcollection1')->row();
         
@@ -804,7 +801,6 @@ class Services extends AdminController
         $data['service_rental_agreement'] = $this->rentals_model->get_rental_agreement($code);
         $data['service_details'] = $this->rentals_model->get_rental_agreement_details($data['service_rental_agreement']->service_rental_agreement_id);
         $data['service_rental_agreement_client'] = $this->clients_model->get($data['service_rental_agreement']->clientid);
-        // Include field reports info if needed
         $data['service_info'] = $data['service_rental_agreement']; 
         
         $pdf = service_rental_agreement_pdf($data);
@@ -844,9 +840,6 @@ class Services extends AdminController
         $pdf->Output('CHECKLIST.pdf', 'I');
     }
 
-    /**
-     * Delete File (Restored from V1)
-     */
     public function delete_file($id, $type)
     {
         $this->db->where('id', $id);
@@ -855,9 +848,7 @@ class Services extends AdminController
         $success = false;
         
         if ($file && ($file->staffid == get_staff_user_id() || is_admin())) {
-            // Delete record
             $this->db->where('id', $id)->delete('tblfiles');
-            // Unlink file
             $path = FCPATH . 'modules/bizit_services_msl/uploads/reports/' . $file->file_name;
             if(file_exists($path)) unlink($path);
             $success = true;
@@ -869,17 +860,12 @@ class Services extends AdminController
         ]);
     }
 
-    /**
-     * GPS Data Methods (Restored from V1)
-     */
     public function gpsDetails()
     {
-        // Try to fetch from core model, if not there, use direct DB
         if(method_exists($this->services_core_model, 'get_gps_details')) {
             $data['gps_details'] = $this->services_core_model->get_gps_details();
         } else {
-            // Fallback implementation to avoid crash
-            $data['gps_details'] = $this->db->get('tblgps_data')->result(); // Assuming table name
+            $data['gps_details'] = $this->db->get('tblgps_data')->result();
         }
         $this->load->view('admin/services/gps_details', $data);
     }
@@ -898,11 +884,8 @@ class Services extends AdminController
             $this->load->view('admin/services/gps_data_form');
         } else {
             $data = $this->input->post('data');
-            // Assuming direct DB insertion if model method missing
             $this->db->insert('tblgps_data', $data);
             $this->load->view('admin/services/form_success');
         }
     }
-
-    public function view_warranty(){ show_404(); }
 }
