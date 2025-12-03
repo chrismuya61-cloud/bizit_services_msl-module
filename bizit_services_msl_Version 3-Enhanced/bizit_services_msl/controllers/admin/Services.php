@@ -58,7 +58,9 @@ class Services extends AdminController
 
     public function index()
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && !is_admin()) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && !has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
+            access_denied('Services');
+        }
         if ($this->input->is_ajax_request()) {
             $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services'));
         }
@@ -70,15 +72,15 @@ class Services extends AdminController
 
     public function manage()
     {
-        if (has_permission(BIZIT_SERVICES_MSL, '', 'view')) {
+        if (has_permission(BIZIT_SERVICES_MSL, '', 'view') || has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
             if ($this->input->post()) {
                 $data = $this->input->post();
                 if (empty($data['serviceid'])) {
-                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Services');
+                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Create Service');
                     $id = $this->services_core_model->add($data);
                     echo json_encode(['success' => (bool)$id, 'message' => $id ? _l('added_successfully', _l('service')) : 'Error']);
                 } else {
-                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Edit Service');
                     $success = $this->services_core_model->edit($data);
                     echo json_encode(['success' => $success, 'message' => $success ? _l('updated_successfully', _l('service')) : 'No changes']);
                 }
@@ -88,7 +90,7 @@ class Services extends AdminController
 
     public function delete($id)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) access_denied('Delete Service');
         $response = $this->services_core_model->delete($id);
         set_alert($response ? 'success' : 'warning', $response ? _l('deleted', _l('service')) : _l('problem_deleting', _l('service')));
         redirect(admin_url('services'));
@@ -96,7 +98,7 @@ class Services extends AdminController
 
     public function delete_category($id)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'delete')) access_denied('Delete Category');
         if (!$id) redirect(admin_url('services'));
 
         $response = $this->services_core_model->delete_category($id);
@@ -112,20 +114,21 @@ class Services extends AdminController
 
     public function category_manage()
     {
-        if (has_permission(BIZIT_SERVICES_MSL, '', 'view')) {
+        if (has_permission(BIZIT_SERVICES_MSL, '', 'view') || has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
             if ($this->input->post()) {
                 $data = $this->input->post();
+                // Auto-generate code if missing
                 if (empty($data['type_code'])) {
                      $count = $this->db->count_all('tblservice_type');
                      $data['type_code'] = sprintf("%03d", $count + 1);
                 }
                 
                 if (empty($data['service_typeid'])) {
-                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Services');
+                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Create Category');
                     $id = $this->services_core_model->add_category($data);
                     echo json_encode(['success' => (bool)$id, 'message' => _l('added_successfully', _l('service_type'))]);
                 } else {
-                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+                    if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Edit Category');
                     $success = $this->services_core_model->edit_category($data);
                     echo json_encode(['success' => $success, 'message' => _l('updated_successfully', _l('service_type'))]);
                 }
@@ -149,6 +152,9 @@ class Services extends AdminController
 
     public function requests()
     {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && !has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
+            access_denied('Services Requests');
+        }
         if ($this->input->is_ajax_request()) {
             $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_requests'));
         }
@@ -157,7 +163,18 @@ class Services extends AdminController
 
     public function new_request($flag = null, $code = null)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Services');
+        // Create Permission
+        if (!$code && !has_permission(BIZIT_SERVICES_MSL, '', 'create')) {
+            access_denied('Create Service Request');
+        }
+        // Edit Permission
+        if ($code && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
+             // Fallback: Allow viewing if they have view permission
+             if(has_permission(BIZIT_SERVICES_MSL, '', 'view') || has_permission(BIZIT_SERVICES_MSL, '', 'view_own')){
+                 redirect(admin_url('services/view_request/'.$code));
+             }
+             access_denied('Edit Service Request');
+        }
 
         if (empty($flag)) $this->session->set_userdata(['service_request_code' => rand(10000, 99999)]);
         
@@ -167,7 +184,14 @@ class Services extends AdminController
 
         if ($code) {
             $data['request'] = $this->requests_model->get_request($code);
-            if(empty($data['request'])) show_error('Invalid service request code.');
+            if(!$data['request']) show_404();
+            
+            // Enforce View Own
+            if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
+                if ($data['request']->received_by != get_staff_user_id()) {
+                    access_denied('View Global Service Request');
+                }
+            }
 
             $data['request_details'] = $this->requests_model->get_request_details($data['request']->service_request_id);
             $data['service_request_client'] = $this->clients_model->get($data['request']->clientid);
@@ -192,7 +216,9 @@ class Services extends AdminController
 
     public function save_request()
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create') && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
+            access_denied('Save Service Request');
+        }
 
         $data = $this->input->post();
         $data['report_files'] = json_encode($this->handle_file_uploads());
@@ -234,7 +260,7 @@ class Services extends AdminController
 
     public function delete_service_price($id, $code)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Edit Service Request');
         
         $deleted = $this->requests_model->delete_request_details($id);
         if ($deleted) {
@@ -247,10 +273,19 @@ class Services extends AdminController
 
     public function view_request($code)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && !has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
+            access_denied('View Service Request');
+        }
 
         $data['service_info'] = $this->requests_model->get_request($code);
         if(!$data['service_info']) show_404();
+        
+        // Enforce View Own Check
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view') && has_permission(BIZIT_SERVICES_MSL, '', 'view_own')) {
+            if ($data['service_info']->received_by != get_staff_user_id()) {
+                access_denied('Access Restricted to Own Requests');
+            }
+        }
 
         $data['service_details'] = $this->db->select('d.*, m.name, t.name as category_name')
             ->from('tblservice_request_details d')
@@ -273,7 +308,7 @@ class Services extends AdminController
 
     public function service_re_confirmation()
     {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Services');
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) access_denied('Edit Service Status');
         
         $data['status'] = $this->input->post('status', true);
         $id = $this->input->post('service_request_id', true);
@@ -287,6 +322,7 @@ class Services extends AdminController
 
     public function delete_accessory()
     {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'edit')) { echo json_encode(['success' => false]); exit; }
         $id = $this->input->post('id', true);
         if ($id) {
             $this->db->where('id', $id);
@@ -456,6 +492,9 @@ class Services extends AdminController
 
     public function rental_agreements()
     {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view') && !has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view_own')) {
+            access_denied('Rental Agreements');
+        }
         if ($this->input->is_ajax_request()) {
             $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_rental_agreements'));
         }
@@ -464,7 +503,8 @@ class Services extends AdminController
 
     public function new_rental_agreement($flag = null, $code = null)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'create')) access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+        if (!$code && !has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'create')) access_denied('Create Rental');
+        if ($code && !has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) access_denied('Edit Rental');
 
         if (empty($flag)) $this->session->set_userdata(['service_rental_agreement_code' => rand(10000, 99999)]);
         
@@ -474,6 +514,14 @@ class Services extends AdminController
 
         if ($code) {
             $data['rental_agreement'] = $this->rentals_model->get_rental_agreement($code);
+            
+            // View Own Check
+            if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view') && has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view_own')) {
+                if ($data['rental_agreement']->received_by != get_staff_user_id()) {
+                    access_denied('View Global Rental Agreement');
+                }
+            }
+            
             $data['rental_agreement_details'] = $this->rentals_model->get_rental_agreement_details($data['rental_agreement']->service_rental_agreement_id);
             $data['uploaded_files'] = $this->rentals_model->get_rental_agreement_files($data['rental_agreement']->service_rental_agreement_id);
         }
@@ -523,10 +571,19 @@ class Services extends AdminController
 
     public function view_rental_agreement($code)
     {
-        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view')) access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view') && !has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view_own')) {
+            access_denied('View Rental Agreement');
+        }
 
         $data['service_info'] = $this->rentals_model->get_rental_agreement($code);
         if(!$data['service_info']) show_404();
+
+        // View Own Check
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view') && has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'view_own')) {
+            if ($data['service_info']->received_by != get_staff_user_id()) {
+                access_denied('Access Restricted');
+            }
+        }
 
         if ($this->input->is_ajax_request()) {
             $this->app->get_table_data(module_views_path(BIZIT_SERVICES_MSL, 'table/services_field_report'), ['service_rental_agreement_id' => $data['service_info']->service_rental_agreement_id]); 
@@ -565,12 +622,8 @@ class Services extends AdminController
 
     public function rental_calendar()
     {
-        // 1. Fetch Rental Data
         $data['rental_details'] = $this->rentals_model->get_calendar_rental_details();
-        
-        // 2. Fetch Service Request Data (New Feature)
         $data['service_request_details'] = $this->requests_model->get_calendar_service_details();
-
         $data['title'] = 'Operations Calendar';
         $this->load->view('admin/services/rental_agreements_calendar', $data);
     }
@@ -634,7 +687,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  5. FIELD REPORTS, COMPENSATION & DASHBOARD
+    //  5. FIELD REPORTS, FILES & DASHBOARD
     // ==========================================================
 
     public function field_reports()
@@ -665,11 +718,9 @@ class Services extends AdminController
         }
     }
 
-    // --- RESTORED: AJAX FILE TAB SUPPORT ---
     public function upload_file($type, $type_id, $upload = false)
     {
         $data['report_code'] = '';
-        // If this is a field report, fetch code for potential usage
         if($type == 'field_report') {
              $data['report_code'] = $this->db->select('report_code')->where('field_report_id', $type_id)->get('tblfield_report')->row('report_code');
         }
@@ -768,7 +819,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  6. UTILITIES (INVOICE, UPLOAD, PDF, GPS)
+    //  6. UTILITIES
     // ==========================================================
 
     public function rental_agreement_invoice_generation($code)
