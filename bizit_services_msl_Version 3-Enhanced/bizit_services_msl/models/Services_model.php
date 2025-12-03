@@ -48,7 +48,6 @@ class Services_core_model extends App_Model {
     public function change_service_status($id, $status) { $this->db->where('service_code', $id)->update('tblservices_module', ['status' => $status]); }
     public function change_service_category_status($id, $status) { $this->db->where('type_code', $id)->update('tblservice_type', ['status' => $status]); }
 
-    // --- RESTORED LEGACY FUNCTIONS ---
     public function get_services_information_by_id($id) {
         $this->db->select('tblservices_module.*, tblservice_type.name as category_name');
         $this->db->from('tblservices_module');
@@ -70,7 +69,6 @@ class Services_core_model extends App_Model {
         return $this->db->get()->num_rows() === 0;
     }
 
-    // Helper for PDF Table Generation
     public function get_table_products_bulk($id) {
         $CI = &get_instance();
         $reqs = $CI->db->select('service_request_id')->where('invoice_rel_id', $id)->get('tblservice_request')->result();
@@ -85,7 +83,7 @@ class Services_core_model extends App_Model {
         return ['html' => $html];
     }
 
-    // --- GPS DATA SUPPORT (RESTORED) ---
+    // --- GPS DATA SUPPORT (REQUIRED BY CONTROLLER) ---
     public function get_gps_details() {
         if ($this->db->table_exists('tblgps_data')) {
             return $this->db->get('tblgps_data')->result();
@@ -95,6 +93,7 @@ class Services_core_model extends App_Model {
 
     public function insert_gps_data($data) {
         if ($this->db->table_exists('tblgps_data')) {
+            $data['date_recorded'] = date('Y-m-d H:i:s');
             $this->db->insert('tblgps_data', $data);
             return $this->db->insert_id();
         }
