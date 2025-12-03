@@ -22,8 +22,15 @@ class Reports_model extends App_Model {
         $id=$data['field_report_id']; unset($data['field_report_id'], $data['added_by'], $data['DataTables_Table_0_length']); 
         $this->db->where('field_report_id', $id)->update('tblfield_report', $data); 
     }
+    
+    // --- RESTORED DELETE FUNCTIONALITY ---
     public function delete_field_report($id) { 
-        $this->db->where('field_report_id', $id)->delete('tblfield_report'); return true; 
+        $this->db->where('field_report_id', $id)->delete('tblfield_report'); 
+        if ($this->db->affected_rows() > 0) {
+            log_activity('Field Report Deleted [ID: ' . $id . ']');
+            return true;
+        }
+        return false;
     }
 
     public function delete_file($id, $type, $type_id, $fname) { 
