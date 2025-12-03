@@ -42,4 +42,22 @@ class Requests_model extends App_Model {
         $this->db->insert('tblgps_data', $data);
         return $this->db->insert_id();
     }
+
+    // --- ENHANCED: SERVICE CALENDAR DATA ---
+    public function get_calendar_service_details() {
+        return $this->db->select('
+                r.service_request_id,
+                r.drop_off_date as start_date, 
+                r.collection_date as end_date, 
+                r.service_request_code,
+                r.item_type as name, 
+                r.serial_no,
+                r.status,
+                c.company as client_name
+            ')
+            ->from('tblservice_request r')
+            ->join('tblclients c', 'c.userid = r.clientid', 'left')
+            ->where('r.status !=', 3) // Assuming 3 is Cancelled
+            ->get()->result();
+    }
 }
