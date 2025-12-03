@@ -38,7 +38,7 @@ if (!function_exists('bizit_check_calibration_reminders')) {
 }
 
 // ==========================================================
-// 2. CORE LOGIC (FIXED: NOW SAVES TO DB)
+// 2. CORE BUSINESS LOGIC (FIXED)
 // ==========================================================
 
 if (!function_exists('_raise_service_invoices')) {
@@ -103,7 +103,7 @@ if (!function_exists('_raise_service_invoices')) {
             "terms" => get_option('predefined_terms_invoice')
         ];
 
-        // --- CRITICAL FIX: INSERT DB ---
+        // --- RESTORED: INSERT TO DB ---
         $id = $CI->invoices_model->add($invoice_data);
         if ($id) {
             $CI->db->where('id', $service_request->id)->update($request_table, ['invoice_rel_id' => $id]);
