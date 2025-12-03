@@ -38,7 +38,7 @@ if (!function_exists('bizit_check_calibration_reminders')) {
 }
 
 // ==========================================================
-// 2. CORE BUSINESS LOGIC (FIXED)
+// 2. CORE BUSINESS LOGIC
 // ==========================================================
 
 if (!function_exists('_raise_service_invoices')) {
@@ -103,7 +103,7 @@ if (!function_exists('_raise_service_invoices')) {
             "terms" => get_option('predefined_terms_invoice')
         ];
 
-        // --- RESTORED: INSERT TO DB ---
+        // --- CRITICAL RESTORATION: INSERT DB ---
         $id = $CI->invoices_model->add($invoice_data);
         if ($id) {
             $CI->db->where('id', $service_request->id)->update($request_table, ['invoice_rel_id' => $id]);
@@ -114,7 +114,7 @@ if (!function_exists('_raise_service_invoices')) {
 }
 
 // ==========================================================
-// 3. UTILITIES
+// 3. UTILITIES & PDF LOADERS
 // ==========================================================
 
 if (!function_exists('set_verification_qrcode')) {
