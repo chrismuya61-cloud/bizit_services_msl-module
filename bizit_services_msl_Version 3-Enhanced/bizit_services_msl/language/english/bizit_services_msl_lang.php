@@ -109,3 +109,12 @@ $lang['inventory_checklist'] = 'Inventory Checklist';
 $lang['filename'] = 'File Name';
 $lang['type'] = 'Type';
 $lang['date_added'] = 'Date Added';
+
+// ... [Existing code] ...
+
+# Notifications (Restored for V3)
+$lang['not_field_operator_assigned'] = 'You have been assigned as a Field Operator for %s';
+$lang['not_field_operator_removed'] = 'You have been removed as a Field Operator for %s';
+$lang['not_report_approval_request'] = 'A Field Report for %s requires your approval';
+$lang['not_report_approved'] = 'Field Report for %s has been approved';
+$lang['not_report_rejected'] = 'Field Report for %s has been rejected';
