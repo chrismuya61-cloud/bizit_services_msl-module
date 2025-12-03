@@ -49,11 +49,6 @@ $(function() {
         initDataTable('.table-service_category', admin_url + 'services/category_manage', [3], [3], 'undefined', [0, 'ASC']);
     }
 
-    // Files Table
-    if ($('.table-services_report_files').length > 0) {
-        // Dynamic URL is handled in the view
-    }
-
     // Reload Tables on Filter Change
     $('#from_date, #to_date, select[name="status_filter"]').on('change', function() {
         if ($('.table-services_requests').length > 0) { $('.table-services_requests').DataTable().ajax.reload(); }
@@ -62,7 +57,7 @@ $(function() {
 
 
     // ==========================================================
-    //  2. MODAL LOGIC (Restored & Optimized)
+    //  2. MODAL LOGIC
     // ==========================================================
 
     // Services Modal (Add/Edit)
@@ -136,19 +131,14 @@ $(function() {
     $('body').on('show.bs.modal', '#service_category_modal', function(event) {
         var $itemModal = $('#service_category_modal');
         var button = $(event.relatedTarget);
-        // If triggered by edit button (custom logic needed if edit button passes data)
         if (typeof(button.data('id')) == 'undefined') {
-             // New
              $itemModal.find('input').val('');
-             $.get(admin_url + "services/category_manage", {type_code: 1}, function(response) { 
-                 // If your controller returned code logic separately, otherwise input is manual or placeholder
-             });
         }
     });
 
 
     // ==========================================================
-    //  3. INVOICE INTEGRATION (Crucial Logic Restored)
+    //  3. INVOICE INTEGRATION
     // ==========================================================
 
     // Listen for "Service Category" selection in Invoice
@@ -177,7 +167,6 @@ $(function() {
         add_service_to_preview($(this).val());
     });
 
-    // The Magic Function to fill Invoice Data
     function add_service_to_preview(code) {
         if(!code) return;
         $.get(admin_url + 'services/get_service_by_code/' + code, function (response) {
@@ -195,13 +184,11 @@ $(function() {
 
             var qty_unit = response.quantity_unit;
             if (!qty_unit && response.rental_duration_check) {
-                qty_unit = response.rental_duration_check; // e.g. 'Day'
+                qty_unit = response.rental_duration_check; 
             }
 
             $('.main input[name="unit"]').val(qty_unit);
             $('.main input[name="rate"]').val(response.price);
-
-            // Auto-set Item For
             $('.main input[name="item_for"]').val($('input[name="invoice_for"]:checked, input[name="estimate_for"]:checked').val());
 
         }, 'json').fail(function () {
@@ -243,7 +230,51 @@ $(function() {
 
 
 // ==========================================================
-//  5. AJAX HANDLERS
+//  5. CUSTOM FEATURE: SECTION HEADERS
+// ==========================================================
+
+function add_section_header() {
+    // Generate unique index based on timestamp
+    var unique_index = (new Date).getTime();
+    var table_body = $('.invoice-items-table tbody, .estimate-items-table tbody, .proposal-items-table tbody');
+    
+    // Calculate colspan based on visible columns (dynamic)
+    var total_columns = table_body.closest('table').find('thead th').length;
+    var colspan = total_columns - 2; // Subtract drag column and delete action column
+
+    var row = '<tr class="sortable item section-header-row" style="background-color: #f8f9fa;">';
+    
+    // Drag Handle
+    row += '<td class="dragger"><input type="hidden" class="order" name="newitems[' + unique_index + '][order]"><i class="fa fa-bars"></i></td>';
+    
+    // Header Input Area
+    row += '<td colspan="' + colspan + '" class="bold">';
+    row += '<input type="text" name="newitems[' + unique_index + '][description]" class="form-control" style="font-weight:bold; font-size:14px; background:transparent; border:none; border-bottom:1px solid #ddd;" placeholder="SECTION HEADER (e.g. Phase 1 Requirements)">';
+    
+    // Hidden Fields to ensure it saves as a non-billable item with specific SECTION flag
+    row += '<input type="hidden" name="newitems[' + unique_index + '][long_description]" value="">';
+    row += '<input type="hidden" name="newitems[' + unique_index + '][unit]" value="SECTION">';
+    row += '<input type="hidden" name="newitems[' + unique_index + '][qty]" value="0">';
+    row += '<input type="hidden" name="newitems[' + unique_index + '][rate]" value="0">';
+    row += '</td>';
+    
+    // Delete Button
+    row += '<td><a href="#" class="btn btn-danger pull-left" onclick="delete_item(this); return false;"><i class="fa fa-times"></i></a></td>';
+    
+    row += '</tr>';
+
+    // Append to table
+    table_body.append(row);
+    
+    // Re-init sortable from Perfex core
+    if(typeof init_items_sortable === 'function') {
+        init_items_sortable(true);
+    }
+}
+
+
+// ==========================================================
+//  6. AJAX HANDLERS (Global Scope)
 // ==========================================================
 
 function manage_service(form) {
@@ -274,11 +305,4 @@ function manage_service_category(form) {
         }
     });
     return false;
-}
-
-function delete_file(id, type) {
-    if (confirm_delete()) {
-        // Logic handled via direct link or specific controller method
-        // This is a placeholder if specific JS delete is needed outside datatable
-    }
 }
