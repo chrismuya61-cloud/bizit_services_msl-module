@@ -1,76 +1,89 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<div class="mtop15 preview-top-wrapper">
+
+<div class="container mtop20">
     <div class="row">
-        <div class="col-md-3">
-            <div class="mbot30">
-                <div class="invoice-html-logo">
-                    <?php echo get_dark_company_logo(); ?>
+        <div class="col-md-8 col-md-offset-2">
+            
+            <div class="panel_s">
+                <div class="panel-body text-center" style="border-top: 5px solid #84c529;">
+                    <div class="mbot20">
+                         <?php echo get_dark_company_logo(); ?>
+                    </div>
+                    
+                    <h1 class="bold mbot5" style="font-size: 24px;">Certificate Verification</h1>
+                    <p class="text-muted">Calibration Record Validation System</p>
+                    
+                    <div class="mtop20">
+                        <span class="label label-success" style="font-size: 100%; padding: 8px 15px; text-transform: uppercase; letter-spacing: 1px;">
+                            <i class="fa fa-check-circle"></i> Verified Authentic
+                        </span>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="clearfix"></div>
-    </div>
-    <div class="top" data-sticky data-sticky-class="preview-sticky-header" style="z-index: 99;">
-        <div class="container preview-sticky-container">
-            <div class="sm:tw-flex tw-justify-between -tw-mx-4">
-                <div class="sm:tw-self-end">
-                    <h3 class="bold tw-my-0 invoice-html-number">
-                        <span class="sticky-visible hide tw-mb-2">
-                            <?php echo get_option('service_request_prefix') . $service_request->service_request_code; ?>
-                        </span>
-                    </h3>
-                    <span class="invoice-html-status">
-                        <span class="label label-success s-status invoice-status">VERIFIED</span>
+
+            <div class="panel_s">
+                <div class="panel-heading">
+                    <span class="bold">Instrument Information</span>
+                    <span class="pull-right text-muted">
+                        Ref: <?php echo get_option('service_request_prefix') . $service_request->service_request_code; ?>
                     </span>
                 </div>
-                <div class="tw-flex tw-items-end tw-space-x-2 tw-mt-3 sm:tw-mt-0">
-                    <?php if(is_client_logged_in()) { ?>
-                    <a href="<?php echo site_url('clients/tickets'); ?>" class="btn btn-default action-button go-to-portal">
-                        Go to Portal
-                    </a>
-                    <?php } ?>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-striped">
+                                <tbody>
+                                    <tr>
+                                        <td class="text-muted">Make / Manufacturer</td>
+                                        <td class="bold"><?php echo $service_request->item_make; ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Model</td>
+                                        <td class="bold"><?php echo $service_request->item_model; ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Equipment Type</td>
+                                        <td class="bold"><?php echo $service_request->item_type; ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Serial Number</td>
+                                        <td class="bold"><?php echo $service_request->serial_no; ?></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info text-center">
+                                <h5 class="bold no-margin">Calibration Status</h5>
+                            </div>
+                            <table class="table">
+                                <tbody>
+                                    <tr>
+                                        <td class="text-muted">Date Calibrated</td>
+                                        <td class="bold text-right"><?php echo _d($service_request->collection_date); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Valid Until</td>
+                                        <td class="bold text-success text-right">
+                                            <?php echo _d(date('Y-m-d', strtotime('+1 year', strtotime($service_request->collection_date)))); ?>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <?php if(is_client_logged_in()) { ?>
+                                <a href="<?php echo site_url('clients/tickets'); ?>" class="btn btn-default btn-block mtop10">
+                                    <i class="fa fa-life-ring"></i> Open Support Ticket
+                                </a>
+                            <?php } ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-footer text-muted text-center" style="font-size: 12px;">
+                    This digital record confirms the instrument listed above has been serviced and calibrated by <?php echo get_option('companyname'); ?>.
                 </div>
             </div>
-        </div>
-    </div>
-    <div class="clearfix"></div>
-    <div class="panel_s mtop20">
-        <div class="panel-body">
-            <div class="col-md-10 col-md-offset-1">
-                <div class="row mtop20">
-                    <div class="col-md-12 text-center">
-                        <h4 class="bold mbot15">Certificate of Calibration</h4>
-                        <p class="text-muted">This instrument has been calibrated and verified by <?php echo get_option('companyname'); ?>.</p>
-                        <hr class="hr-panel-heading" />
-                    </div>
-                    <div class="col-md-6 border-right">
-                        <h5 class="bold">Instrument Details</h5>
-                        <table class="table table-condensed">
-                            <tbody>
-                                <tr><td>Make:</td><td><?php echo $service_request->item_make; ?></td></tr>
-                                <tr><td>Model:</td><td><?php echo $service_request->item_model; ?></td></tr>
-                                <tr><td>Type:</td><td><?php echo $service_request->item_type; ?></td></tr>
-                                <tr><td>Serial No:</td><td><?php echo $service_request->serial_no; ?></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                         <h5 class="bold">Certificate Details</h5>
-                         <table class="table table-condensed">
-                            <tbody>
-                                <tr><td>Certificate No:</td><td><?php echo get_option('service_request_prefix') . $service_request->service_request_code; ?></td></tr>
-                                <tr><td>Date Calibrated:</td><td><?php echo _d($service_request->collection_date); ?></td></tr>
-                                <tr><td>Valid Until:</td><td class="text-success bold"><?php echo _d(date('Y-m-d', strtotime('+1 year', strtotime($service_request->collection_date)))); ?></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+
         </div>
     </div>
 </div>
-<script>
-    $(function() {
-        new Sticky('[data-sticky]');
-    });
-</script>
