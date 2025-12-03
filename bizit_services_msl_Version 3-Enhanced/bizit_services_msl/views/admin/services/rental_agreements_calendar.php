@@ -40,15 +40,11 @@ $(function() {
                 for(var i in e.events) {
                     content += '<div class="event-tooltip-content"><div class="bg_cal" style="background:' + e.events[i].color + '"></div>'
                                     + '<div class="event-name" style="color:' + e.events[i].color + '">' + e.events[i].name + '</div>'
-                                    + '<div class="event-location">' + e.events[i].rental_no + '</div>'
+                                    + '<div class="event-location">' + e.events[i].identifier + '</div>'
                                     + '<div class="event-location">' + e.events[i].product_serial_code + '</div>'
-                                    + '<div class="event-location">' + e.events[i].client + '</div>';
-
-                if(e.events[i].status == 2){// confirmed
-                    content += '<div class="event-location" style="color:maroon; font-weight:bold;">Equipment Returned</div>';
-                }
-                else{content += '<div class="event-location" style="color:green; font-weight:bold;">Equipment Hired</div>';}
-                    content += '</div>';
+                                    + '<div class="event-location">' + e.events[i].client + '</div>'
+                                    + '<div class="event-location" style="font-weight:bold; color:' + e.events[i].color + '">' + e.events[i].status_label + '</div>'
+                                    + '</div>';
                 }
             
                 $(e.element).popover({ 
@@ -69,40 +65,62 @@ $(function() {
         dayContextMenu: function(e) {
             $(e.element).popover('hide');
         },
-       //style:'background',
         dataSource: [
         <?php 
         $count = 0;
-         foreach ($rental_details as $rental_calender) {
-            $start_date = new DateTime($rental_calender->start_date);
-            $start_date_year = $start_date->format('Y');
-            $start_date_month= $start_date->format('m');
-            $start_date_day = $start_date->format('d');
+        
+        // 1. RENTAL AGREEMENTS
+        if(isset($rental_details)){
+            foreach ($rental_details as $rental) {
+                $start = new DateTime($rental->start_date);
+                $end = new DateTime(!empty($rental->actual_date_returned) ? $rental->actual_date_returned : $rental->end_date);
+                
+                // Color Logic: Maroon for Returned (2), Green for Active
+                $color = ($rental->status == 2) ? 'maroon' : 'green';
+                $status_label = ($rental->status == 2) ? 'Equipment Returned' : 'Equipment Hired';
 
-            $end_date = new DateTime(!empty($rental_calender->actual_date_returned) ? $rental_calender->actual_date_returned : $rental_calender->end_date);
-            $end_date_year = $end_date->format('Y');
-            $end_date_month= $end_date->format('m');
-            $end_date_day = $end_date->format('d');
+                echo "{
+                    id: 'rent_" . $count++ . "',
+                    name: 'RENTAL: " . addslashes($rental->name) . "',
+                    identifier: '<b>Rental #:</b> " . get_option('service_rental_agreement_prefix') . $rental->service_rental_agreement_code . "',
+                    product_serial_code: '<b>Serial:</b> #" . $rental->rental_serial . "',
+                    client: '<b>Client:</b> " . addslashes($rental->client_name) . "',
+                    status_label: '" . $status_label . "',
+                    color: '" . $color . "',
+                    startDate: new Date(" . $start->format('Y, m, d') . "),
+                    endDate: new Date(" . $end->format('Y, m, d') . "),
+                },";
+            }
+        }
 
-        ?>
-           {    id: <?php echo $count; ?>,
-                name: '<?php echo $rental_calender->name; ?>',
-                rental_no: '<b>Rental:</b> <?php echo get_option('service_rental_agreement_prefix').$rental_calender->service_rental_agreement_code; ?>',
-                product_serial_code: '<b>Serial No:</b> #<?php echo $rental_calender->rental_serial; ?>',
-                client: "<b>Client:</b> <?php echo get_company_name($rental_calender->clientid); ?>",
-                status: '<?php echo $rental_calender->status; ?>',
-                startDate: new Date(<?php echo $start_date_year; ?>, <?php echo $start_date_month; ?>, <?php echo $start_date_day; ?>),
-                endDate: new Date(<?php echo $end_date_year; ?>, <?php echo $end_date_month; ?>, <?php echo $end_date_day; ?>),
-            },  
-        <?php
-        $count++;
-         }
+        // 2. SERVICE REQUESTS (Enhanced Feature)
+        if(isset($service_request_details)){
+            foreach ($service_request_details as $req) {
+                $start = new DateTime($req->start_date);
+                $end = new DateTime($req->end_date);
+                
+                // Color Logic: Blue for Active, Orange for Completed/Collected
+                // Assuming status 2 = ready/complete
+                $color = ($req->status == 2) ? 'orange' : '#1e90ff'; 
+                $status_label = ($req->status == 2) ? 'Service Complete' : 'In Progress';
+
+                echo "{
+                    id: 'serv_" . $count++ . "',
+                    name: 'SERVICE: " . addslashes($req->name) . "',
+                    identifier: '<b>Request #:</b> " . get_option('service_request_prefix') . $req->service_request_code . "',
+                    product_serial_code: '<b>Serial:</b> " . $req->serial_no . "',
+                    client: '<b>Client:</b> " . addslashes($req->client_name) . "',
+                    status_label: '" . $status_label . "',
+                    color: '" . $color . "',
+                    startDate: new Date(" . $start->format('Y, m, d') . "),
+                    endDate: new Date(" . $end->format('Y, m, d') . "),
+                },";
+            }
+        }
         ?>  
         ]
     });
-    
 });
-
 </script>
 </body>
 </html>
