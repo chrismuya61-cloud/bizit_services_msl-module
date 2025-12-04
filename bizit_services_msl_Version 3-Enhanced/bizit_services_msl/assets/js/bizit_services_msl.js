@@ -1,5 +1,5 @@
 /**
- * Bizit Services MSL - Master JS File (V3.2)
+ * Bizit Services MSL - Master JS File (V3.3 Hybrid)
  */
 
 $(function() {
@@ -234,10 +234,14 @@ $(function() {
 // ==========================================================
 
 function add_section_header() {
-    // Generate unique index based on timestamp
+    // Generate unique index based on timestamp to allow INFINITY ROWS
     var unique_index = (new Date).getTime();
-    var table_body = $('.invoice-items-table tbody, .estimate-items-table tbody, .proposal-items-table tbody');
     
+    // Selectors now include Contracts (.contract-items-table)
+    var table_body = $('.invoice-items-table tbody, .estimate-items-table tbody, .proposal-items-table tbody, .contract-items-table tbody');
+    
+    if(table_body.length === 0) return;
+
     // Calculate colspan based on visible columns (dynamic)
     var total_columns = table_body.closest('table').find('thead th').length;
     var colspan = total_columns - 2; // Subtract drag column and delete action column
@@ -247,13 +251,13 @@ function add_section_header() {
     // Drag Handle
     row += '<td class="dragger"><input type="hidden" class="order" name="newitems[' + unique_index + '][order]"><i class="fa fa-bars"></i></td>';
     
-    // Header Input Area
+    // Header Input Area (Custom Description)
     row += '<td colspan="' + colspan + '" class="bold">';
     row += '<input type="text" name="newitems[' + unique_index + '][description]" class="form-control" style="font-weight:bold; font-size:14px; background:transparent; border:none; border-bottom:1px solid #ddd;" placeholder="SECTION HEADER (e.g. Phase 1 Requirements)">';
     
     // Hidden Fields to ensure it saves as a non-billable item with specific SECTION flag
     row += '<input type="hidden" name="newitems[' + unique_index + '][long_description]" value="">';
-    row += '<input type="hidden" name="newitems[' + unique_index + '][unit]" value="SECTION">';
+    row += '<input type="hidden" name="newitems[' + unique_index + '][unit]" value="SECTION">'; // Flag for backend
     row += '<input type="hidden" name="newitems[' + unique_index + '][qty]" value="0">';
     row += '<input type="hidden" name="newitems[' + unique_index + '][rate]" value="0">';
     row += '</td>';
@@ -266,7 +270,7 @@ function add_section_header() {
     // Append to table
     table_body.append(row);
     
-    // Re-init sortable from Perfex core
+    // Re-init sortable from Perfex core to enable Drag & Drop
     if(typeof init_items_sortable === 'function') {
         init_items_sortable(true);
     }
@@ -306,3 +310,24 @@ function manage_service_category(form) {
     });
     return false;
 }
+
+// ==========================================================
+//  7. AUTO-INJECTION FOR CONTRACTS (Document Ready)
+// ==========================================================
+$(document).ready(function() {
+    // Check if we are on the Contract Edit page
+    if($('.contract-items-table').length > 0) {
+        // Locate the "Add Item" button group wrapper
+        var buttonWrapper = $('.contract-items-table').closest('.panel-body').find('.btn-group').first();
+        
+        // If not found, look for the top toolbar
+        if(buttonWrapper.length === 0) {
+            buttonWrapper = $('.accounting-template .btn-group').first();
+        }
+
+        // Inject the "Add Section" button if it doesn't exist
+        if(buttonWrapper.find('.add-section-btn').length === 0) {
+            buttonWrapper.append('<button type="button" class="btn btn-default add-section-btn" onclick="add_section_header();" style="margin-left: 5px;"><i class="fa fa-list-alt"></i> Add Section Header</button>');
+        }
+    }
+});
