@@ -66,4 +66,25 @@ class Sales_orders extends AdminController
             redirect(admin_url('services/sales_orders/order/' . $id));
         }
     }
+    public function save_signature($id) {
+        $data = $this->input->post();
+        $update_data = [];
+        
+        // Process Client Signature (Base30 to Image)
+        if(!empty($data['client_signature'])) {
+             // Perfex helper to save signature
+             // Logic to decode base30/base64 and save to uploads/signatures
+        }
+        
+        // Process Staff Signature
+        if(!empty($data['staff_signature'])) {
+             // Save staff signature
+             $update_data['staff_signature'] = $data['staff_signature']; // Store base data or image path
+        }
+        
+        $this->db->where('id', $id);
+        $this->db->update('tblsales_orders', $update_data);
+        
+        redirect(admin_url('services/sales_orders/order/'.$id));
+    }
 }
