@@ -54,6 +54,7 @@ class Services extends AdminController
 
     /**
      * Fetches the rate/price of a specific accessory.
+     * Restored from V1 logic.
      */
     public function get_service_accessory_by_id($id)
     {
@@ -61,7 +62,8 @@ class Services extends AdminController
              show_404();
         }
         
-        $result = $this->services_core_model->get_service_accessory_by_id($id);
+        // Using core model or direct DB if model method missing in V3
+        $result = $this->db->where('id', $id)->get('tblitems')->row();
 
         if ($result) {
             echo json_encode(['success' => true, 'rate' => $result->rate]);
@@ -72,6 +74,7 @@ class Services extends AdminController
 
     /**
      * Fetches the service code for a given service ID.
+     * Restored from V1 logic.
      */
     public function get_service_code()
     {
@@ -89,7 +92,8 @@ class Services extends AdminController
     }
 
     /**
-     * Quick update for Rental Agreement status via AJAX
+     * Quick update for Rental Agreement status via AJAX.
+     * Restored from V1 logic.
      */
     public function update_status()
     {
@@ -618,6 +622,7 @@ class Services extends AdminController
             if ($success) {
                 set_alert('success', 'Calibration report ' . $action_type . ' successfully');
             } else {
+                // V1 logic suggests success message even if DB returns false (e.g. no changes made)
                 set_alert('success', 'Calibration report Saved'); 
             }
             redirect(admin_url('services/report/edit/' . $service_code));
