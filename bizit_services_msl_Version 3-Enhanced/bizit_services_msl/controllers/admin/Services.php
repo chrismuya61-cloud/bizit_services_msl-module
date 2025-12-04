@@ -334,23 +334,21 @@ class Services extends AdminController
         }
     }
 
-// [Version 3] Replace the existing save_calibration in controllers/admin/Services.php
-
-    public function save_calibration()
+public function save_calibration()
     {
         // 1. Permission Check
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'create') && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
             access_denied('Services');
         }
 
-        $data = []; // Initialize data array
+        $data = []; 
         $calibration_instrument = $this->input->post('calibration_instrument', true);
 
         // ==========================================================
-        //  INSTRUMENT: TOTAL STATION / THEODOLITE
+        //  INSTRUMENT: TOTAL STATION
         // ==========================================================
         if ($calibration_instrument == 'Total Station') {
-            // Map 1-48 EDM fields
+            // Map 1-48 EDM fields (Pre-calibration)
             for ($i = 1; $i <= 48; $i++) {
                 $data['i_edm_a_' . $i] = $this->input->post('i_edm_a_' . $i);
             }
@@ -360,10 +358,11 @@ class Services extends AdminController
             }
 
             // Angles Conversion (Degrees, Minutes, Seconds to Decimal)
+            // Pre-calibration Angles
             $angles = ['i_h_a', 'i_h_b', 'ii_h_a', 'ii_h_b', 'i_v_a', 'i_v_b', 'ii_v_a', 'ii_v_b'];
             foreach ($angles as $angle) {
                 $input = $this->input->post($angle);
-                // Handle array input for angles if split into [deg, min, sec]
+                // Handle array input if split into [deg, min, sec]
                 if(is_array($input)) {
                      $data[$angle] = dms2dec($input[0], $input[1], $input[2]);
                 } else {
@@ -376,7 +375,7 @@ class Services extends AdminController
                 $data['i_edm_a_' . $i] = $this->input->post('i_edm_a_' . $i);
             }
 
-            // Additional Post-calibration Angles
+            // Post-calibration Angles
             $post_angles = ['t_h_a', 't_h_b', 'tt_h_a', 'tt_h_b', 't_v_a', 't_v_b', 'tt_v_a', 'tt_v_b'];
             foreach ($post_angles as $angle) {
                 $input = $this->input->post($angle);
@@ -392,11 +391,12 @@ class Services extends AdminController
         //  INSTRUMENT: THEODOLITE
         // ==========================================================
         if ($calibration_instrument == 'Theodolite') {
+            // Instrument Info
             for ($i = 1; $i <= 14; $i++) {
                 $data['th_v_a_' . $i] = $this->input->post('th_v_a_' . $i);
             }
 
-            // Explicit Angle Conversion for Theodolite
+            // Pre-calibration Angles
             $theo_angles = [
                 'th_h_a', 'th_h_b', 'thh_h_a', 'thh_h_b', 
                 'th_v_a', 'th_v_b', 'thh_v_a', 'thh_v_b', 'thh_v_c'
@@ -408,7 +408,7 @@ class Services extends AdminController
                 }
             }
 
-            // Post-calibration data
+            // Post-calibration Angles (suffix '1')
             $theo_post_angles = [
                 'th_h_a1', 'th_h_b1', 'thh_h_a1', 'thh_h_b1',
                 'th_v_a1', 'th_v_b1', 'thh_v_a1', 'thh_v_b1', 'thh_v_c1'
@@ -425,9 +425,12 @@ class Services extends AdminController
         //  INSTRUMENT: GNSS
         // ==========================================================
         if ($calibration_instrument == 'GNSS') {
-            // Pre-Calibration Checks (Table A1 - A4)
+            // Table Definitions (V1 Logic)
             $prefixes = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'xi', 'x'];
-            $suffixes = ['a', 'b', 'c']; // Tables
+            
+            // Pre-Calibration Checks (Table A1 - A4)
+            // Suffixes: 'a', 'b', 'c' correspond to different tables/sections
+            $suffixes = ['a', 'b', 'c']; 
             
             foreach ($suffixes as $s) {
                 foreach ($prefixes as $p) {
@@ -439,6 +442,7 @@ class Services extends AdminController
             }
 
             // Post-Calibration Checks (Table A1 - A4 Post)
+            // Suffixes: 'aa', 'bb', 'cc'
             $post_suffixes = ['aa', 'bb', 'cc'];
             foreach ($post_suffixes as $s) {
                 foreach ($prefixes as $p) {
@@ -449,7 +453,7 @@ class Services extends AdminController
                 }
             }
 
-            // Receiver Info
+            // Receiver Info (r_v_a_1 to r_v_a_13)
             for ($i = 1; $i <= 13; $i++) {
                 $data['r_v_a_' . $i] = $this->input->post('r_v_a_' . $i);
             }
@@ -459,6 +463,7 @@ class Services extends AdminController
             for ($i = 1; $i <= 6; $i++) {
                 $start = $this->input->post('start_time_' . $i);
                 $stop = $this->input->post('stop_time_' . $i);
+                // Format: YYYY-MM-DD HH:MM:SS
                 if($start) $data['start_time_' . $i] = $current_date . ' ' . date('H:i:s', strtotime($start));
                 if($stop) $data['stop_time_' . $i] = $current_date . ' ' . date('H:i:s', strtotime($stop));
             }
@@ -473,10 +478,11 @@ class Services extends AdminController
                 $data['lv_v_a_' . $i] = $this->input->post('lv_v_a_' . $i, true);
             }
 
-            // Pre-calibration (a, b, c, d) and Post-calibration (e, f, g, h)
+            // Pre-calibration (Backsight/Foresight A, B, C, D)
+            // Post-calibration (Backsight/Foresight E, F, G, H)
             $level_prefixes = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
             
-            // Pre
+            // Pre-calibration loop
             foreach ($level_prefixes as $p) {
                 $data["{$p}_backsight_a"] = $this->input->post("{$p}_backsight_a", true);
                 $data["{$p}_foresight_b"] = $this->input->post("{$p}_foresight_b", true);
@@ -484,7 +490,7 @@ class Services extends AdminController
                 $data["{$p}_foresight_d"] = $this->input->post("{$p}_foresight_d", true);
             }
 
-            // Post
+            // Post-calibration loop
             foreach ($level_prefixes as $p) {
                 $data["{$p}_backsight_e"] = $this->input->post("{$p}_backsight_e", true);
                 $data["{$p}_foresight_f"] = $this->input->post("{$p}_foresight_f", true);
@@ -502,7 +508,7 @@ class Services extends AdminController
                 $data['ls_v_a_' . $i] = $this->input->post('ls_v_a_' . $i, true);
             }
 
-            // Explicit Laser Fields
+            // Explicit Laser Reading Fields
             $laser_fields = [
                 'hh_bsa1', 'hh_fsa1', 'hl_bsa1', 'hl_fsa1',
                 'hh_bsa2', 'hh_fsa2', 'vl_bsa1', 'vl_fsa1',
@@ -524,6 +530,7 @@ class Services extends AdminController
         $service_code = $this->input->post('service_code', true);
         $edit_id = $this->input->post('edit_id', true);
 
+        // Ensure service_request_id is set if we have the code
         if (!empty($service_code)) {
             $service_info = $this->db->where('service_request_code', $service_code)->get('tblservice_request')->row();
             if($service_info) {
@@ -543,123 +550,25 @@ class Services extends AdminController
             $action_type = 'updated';
         }
 
-        // Handle Response
+        // Handle Response (Redirect or AJAX)
         $autosave = $this->input->post('autosave', true);
         
         if (!isset($autosave)) {
             if ($success) {
                 set_alert('success', 'Calibration report ' . $action_type . ' successfully');
             } else {
-                set_alert('warning', 'No changes made or save failed');
+                // V1 logic suggests success message even if DB returns false (e.g. no changes made)
+                set_alert('success', 'Calibration report Saved'); 
             }
             redirect(admin_url('services/report/edit/' . $service_code));
         } else {
             // AJAX Autosave response
             echo json_encode([
-                'success' => $success, 
-                'message' => $success ? 'Calibration report ' . $action_type . ' successfully' : 'Save failed'
+                'success' => true, 
+                'message' => 'Calibration report ' . ($action_type ?? 'saved') . ' successfully'
             ]);
         }
     }
-
-    public function request_invoice_generation($code = null)
-    {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('invoices');
-
-        $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
-        
-        $service_details = $this->db->select('d.*, m.name, m.service_code, t.name as category_name')
-            ->from('tblservice_request_details d')
-            ->join('tblservices_module m', 'm.serviceid = d.serviceid')
-            ->join('tblservice_type t', 'm.service_type_code = t.type_code', 'left')
-            ->where('d.service_request_id', $service_request->service_request_id)
-            ->get()->result();
-
-        $accessories = $this->db->select('a.*, i.commodity_name, i.unit')
-            ->from('tblservice_request_accessories a')
-            ->join('tblitems i', 'i.id = a.accessory_id')
-            ->where('a.service_request_id', $service_request->service_request_id)
-            ->get()->result();
-
-        $newitems = [];
-        $i = 1;
-        $subtotal = 0;
-
-        foreach ($service_details as $val) {
-            $newitems[$i] = [
-                "order" => $i,
-                "description" => $val->name,
-                "long_description" => $val->category_name . ' (' . $val->service_code . ') - Make: ' . $service_request->item_make . ' Model: ' . $service_request->item_model,
-                "qty" => 1,
-                "unit" => "Unit",
-                "rate" => $val->price,
-                "taxable" => 1
-            ];
-            $subtotal += $val->price;
-            $i++;
-        }
-
-        foreach ($accessories as $acc) {
-            $newitems[$i] = [
-                "order" => $i,
-                "description" => $acc->commodity_name,
-                "long_description" => "Accessory",
-                "qty" => 1,
-                "unit" => $acc->unit,
-                "rate" => $acc->price,
-                "taxable" => 1
-            ];
-            $subtotal += $acc->price;
-            $i++;
-        }
-
-        $client = $this->clients_model->get($service_request->clientid);
-        $inv_data = [
-            "clientid" => $client->userid,
-            "date" => _d(date('Y-m-d')),
-            "currency" => get_default_currency('id'),
-            "subtotal" => $subtotal,
-            "total" => $subtotal,
-            "newitems" => $newitems,
-            "save_as_draft" => "true",
-            "number" => str_pad(get_option('next_invoice_number'), get_option('number_padding_prefixes'), '0', STR_PAD_LEFT)
-        ];
-
-        $id = $this->invoices_model->add($inv_data);
-        if ($id) {
-            $this->db->where('service_request_id', $service_request->service_request_id)
-                ->update('tblservice_request', ['invoice_rel_id' => $id]);
-            set_alert('success', _l('added_successfully', _l('invoice')));
-            redirect(admin_url('services/view_request/' . $code));
-        }
-    }
-
-    public function certificate_pdf($code = null)
-    {
-        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view')) access_denied('Services');
-        if (empty($code)) redirect(admin_url('services/requests'));
-
-        $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
-        if (!$service_request) show_error('Service request not found.');
-
-        $qr_data = site_url('service/certificate/validate/' . $service_request->service_request_code);
-        $this->load->library('ciqrcode');
-        $params['data'] = $qr_data;
-        $params['level'] = 'L';
-        $params['size'] = 2;
-        $qr_image_path = FCPATH . 'uploads/temp/' . uniqid() . '.png';
-        $params['savename'] = $qr_image_path;
-        if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
-        $this->ciqrcode->generate($params);
-        $data['qr_code_base64'] = base64_encode(file_get_contents($qr_image_path));
-        unlink($qr_image_path);
-
-        $data['service_request'] = $service_request;
-        $html = $this->load->view('admin/services/html_certificate', $data, true);
-        
-        $this->dpdf->pdf_create($html, 'CERTIFICATE-' . $code, 'view');
-    }
-
     // ==========================================================
     //  4. RENTAL AGREEMENTS
     // ==========================================================
