@@ -51,6 +51,67 @@ class Services extends AdminController
         }
         echo json_encode($service);
     }
+
+    /**
+     * Fetches the rate/price of a specific accessory.
+     */
+    public function get_service_accessory_by_id($id)
+    {
+        if (!$this->input->is_ajax_request()) {
+             show_404();
+        }
+        
+        $result = $this->services_core_model->get_service_accessory_by_id($id);
+
+        if ($result) {
+            echo json_encode(['success' => true, 'rate' => $result->rate]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Item not found']);
+        }
+    }
+
+    /**
+     * Fetches the service code for a given service ID.
+     */
+    public function get_service_code()
+    {
+        if (!$this->input->is_ajax_request()) {
+             show_404();
+        }
+
+        $serviceId = $this->input->post('serviceid');
+        $service = $this->db->select('service_code')
+                            ->from('tblservices_module')
+                            ->where('serviceid', $serviceId)
+                            ->get()->row_array();
+
+        echo json_encode($service);
+    }
+
+    /**
+     * Quick update for Rental Agreement status via AJAX
+     */
+    public function update_status()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        $id = $this->input->post('service_rental_agreement_id');
+        $status = $this->input->post('status');
+
+        if ($id && isset($status)) {
+            $this->db->where('service_rental_agreement_id', $id);
+            $success = $this->db->update('tblservice_rental_agreement', ['status' => $status]);
+
+            echo json_encode([
+                'status' => $success ? 'success' : 'error',
+                'message' => $success ? 'Status updated successfully!' : 'Failed to update status'
+            ]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid input data']);
+        }
+    }
     
     // ==========================================================
     //  2. CORE SERVICES & SETTINGS
@@ -334,7 +395,7 @@ class Services extends AdminController
         }
     }
 
-public function save_calibration()
+    public function save_calibration()
     {
         // 1. Permission Check
         if (!has_permission(BIZIT_SERVICES_MSL, '', 'create') && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
@@ -557,7 +618,6 @@ public function save_calibration()
             if ($success) {
                 set_alert('success', 'Calibration report ' . $action_type . ' successfully');
             } else {
-                // V1 logic suggests success message even if DB returns false (e.g. no changes made)
                 set_alert('success', 'Calibration report Saved'); 
             }
             redirect(admin_url('services/report/edit/' . $service_code));
@@ -569,6 +629,105 @@ public function save_calibration()
             ]);
         }
     }
+
+    public function request_invoice_generation($code = null)
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create')) access_denied('invoices');
+
+        $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
+        
+        $service_details = $this->db->select('d.*, m.name, m.service_code, t.name as category_name')
+            ->from('tblservice_request_details d')
+            ->join('tblservices_module m', 'm.serviceid = d.serviceid')
+            ->join('tblservice_type t', 'm.service_type_code = t.type_code', 'left')
+            ->where('d.service_request_id', $service_request->service_request_id)
+            ->get()->result();
+
+        $accessories = $this->db->select('a.*, i.commodity_name, i.unit')
+            ->from('tblservice_request_accessories a')
+            ->join('tblitems i', 'i.id = a.accessory_id')
+            ->where('a.service_request_id', $service_request->service_request_id)
+            ->get()->result();
+
+        $newitems = [];
+        $i = 1;
+        $subtotal = 0;
+
+        foreach ($service_details as $val) {
+            $newitems[$i] = [
+                "order" => $i,
+                "description" => $val->name,
+                "long_description" => $val->category_name . ' (' . $val->service_code . ') - Make: ' . $service_request->item_make . ' Model: ' . $service_request->item_model,
+                "qty" => 1,
+                "unit" => "Unit",
+                "rate" => $val->price,
+                "taxable" => 1
+            ];
+            $subtotal += $val->price;
+            $i++;
+        }
+
+        foreach ($accessories as $acc) {
+            $newitems[$i] = [
+                "order" => $i,
+                "description" => $acc->commodity_name,
+                "long_description" => "Accessory",
+                "qty" => 1,
+                "unit" => $acc->unit,
+                "rate" => $acc->price,
+                "taxable" => 1
+            ];
+            $subtotal += $acc->price;
+            $i++;
+        }
+
+        $client = $this->clients_model->get($service_request->clientid);
+        $inv_data = [
+            "clientid" => $client->userid,
+            "date" => _d(date('Y-m-d')),
+            "currency" => get_default_currency('id'),
+            "subtotal" => $subtotal,
+            "total" => $subtotal,
+            "newitems" => $newitems,
+            "save_as_draft" => "true",
+            "number" => str_pad(get_option('next_invoice_number'), get_option('number_padding_prefixes'), '0', STR_PAD_LEFT)
+        ];
+
+        $id = $this->invoices_model->add($inv_data);
+        if ($id) {
+            $this->db->where('service_request_id', $service_request->service_request_id)
+                ->update('tblservice_request', ['invoice_rel_id' => $id]);
+            set_alert('success', _l('added_successfully', _l('invoice')));
+            redirect(admin_url('services/view_request/' . $code));
+        }
+    }
+
+    public function certificate_pdf($code = null)
+    {
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'view')) access_denied('Services');
+        if (empty($code)) redirect(admin_url('services/requests'));
+
+        $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
+        if (!$service_request) show_error('Service request not found.');
+
+        $qr_data = site_url('service/certificate/validate/' . $service_request->service_request_code);
+        $this->load->library('ciqrcode');
+        $params['data'] = $qr_data;
+        $params['level'] = 'L';
+        $params['size'] = 2;
+        $qr_image_path = FCPATH . 'uploads/temp/' . uniqid() . '.png';
+        $params['savename'] = $qr_image_path;
+        if(!is_dir(FCPATH.'uploads/temp/')) mkdir(FCPATH.'uploads/temp/', 0755);
+        $this->ciqrcode->generate($params);
+        $data['qr_code_base64'] = base64_encode(file_get_contents($qr_image_path));
+        unlink($qr_image_path);
+
+        $data['service_request'] = $service_request;
+        $html = $this->load->view('admin/services/html_certificate', $data, true);
+        
+        $this->dpdf->pdf_create($html, 'CERTIFICATE-' . $code, 'view');
+    }
+
     // ==========================================================
     //  4. RENTAL AGREEMENTS
     // ==========================================================
@@ -890,35 +1049,104 @@ public function save_calibration()
     //  6. UTILITIES (INVOICE, UPLOAD, PDF, GPS)
     // ==========================================================
 
-    public function rental_agreement_invoice_generation($code)
+    public function rental_agreement_invoice_generation($code, $invoiceid = null)
     {
-        $agr = $this->rentals_model->get_rental_agreement($code);
-        $details = $this->rentals_model->get_rental_agreement_details($agr->service_rental_agreement_id);
-        
-        $start = new DateTime($agr->start_date);
-        $end = new DateTime($agr->end_date);
-        $days = $end->diff($start)->format("%a") - $agr->discounted_days;
-        
-        $newitems = []; $i = 1; $subtotal = 0;
-        foreach ($details as $d) {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'edit')) {
+            access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+        }
+
+        // Get Rental Agreement
+        $service_rental_agreement = $this->rentals_model->get_rental_agreement($code);
+        if (!$service_rental_agreement) show_404();
+
+        // Get Details
+        $service_details = $this->rentals_model->get_rental_agreement_details($service_rental_agreement->service_rental_agreement_id);
+
+        // Calculate Days
+        $start = new DateTime($service_rental_agreement->start_date);
+        $end = new DateTime($service_rental_agreement->end_date);
+        $days = $end->diff($start)->format("%a") - $service_rental_agreement->discounted_days;
+
+        // Build Invoice Items
+        $newitems = [];
+        $i = 1;
+        $subtotal = 0;
+        $penalty_rate = 0; // Accumulate penalty rate for extra days check
+
+        foreach ($service_details as $val) {
             $newitems[$i] = [
-                "order" => $i, "description" => "Rental: " . $code, "qty" => $days, "unit" => "Days", "rate" => $d->price, "taxable" => 1
+                "order" => $i,
+                "description" => $val->name,
+                "long_description" => $val->category_name . ', Service Code => ' . $val->service_code,
+                "qty" => $days,
+                "unit" => "Days",
+                "rate" => $val->price,
+                "taxable" => 1
             ];
-            $subtotal += ($d->price * $days);
+            $subtotal += ($val->price * $days);
+            
+            // Fallback to standard price if penalty price is not set
+            $item_penalty = isset($val->penalty_rental_price) ? $val->penalty_rental_price : $val->price;
+            $penalty_rate += $item_penalty;
+            
             $i++;
         }
-        if ($agr->extra_days > 0) {
-            $newitems[$i] = ["order" => $i, "description" => "Extra Days Penalty", "qty" => $agr->extra_days, "unit" => "Days", "rate" => 0, "taxable" => 1]; 
+
+        // Handle Extra Days (Penalty)
+        if ($service_rental_agreement->extra_days > 0) {
+            $newitems[$i] = [
+                "order" => $i,
+                "description" => "Extra Days Penalty",
+                "long_description" => "Accumulated Equipment cost for " . $service_rental_agreement->extra_days . " extra days",
+                "qty" => $service_rental_agreement->extra_days,
+                "unit" => "Days",
+                "rate" => $penalty_rate,
+                "taxable" => 1
+            ];
+            $subtotal += ($penalty_rate * $service_rental_agreement->extra_days);
         }
-        $client = $this->clients_model->get($agr->clientid);
-        $inv_data = [
-            "clientid" => $client->userid, "date" => _d(date('Y-m-d')), "currency" => get_default_currency('id'),
-            "subtotal" => $subtotal, "total" => $subtotal, "newitems" => $newitems,
+
+        $client = $this->clients_model->get($service_rental_agreement->clientid);
+        
+        // Basic Invoice Data
+        $invoice_data = [
+            "clientid" => $client->userid,
+            "date" => _d(date('Y-m-d')),
+            "currency" => get_default_currency('id'),
+            "subtotal" => $subtotal,
+            "total" => $subtotal,
+            "newitems" => $newitems,
+            "billing_street" => $client->billing_street,
+            "billing_city" => $client->billing_city,
+            "billing_state" => $client->billing_state,
+            "billing_zip" => $client->billing_zip,
+            "billing_country" => $client->billing_country,
             "save_as_draft" => "true"
         ];
-        $this->invoices_model->add($inv_data);
-        set_alert('success', 'Invoice Generated');
-        redirect(admin_url('services/view_rental_agreement/' . $code));
+
+        // CREATE or UPDATE Logic
+        if (empty($invoiceid)) {
+            // Generate new number only for new invoices
+            $invoice_data["number"] = str_pad(get_option('next_invoice_number'), get_option('number_padding_prefixes'), '0', STR_PAD_LEFT);
+            
+            $id = $this->invoices_model->add($invoice_data);
+            if ($id) {
+                $this->db->where('service_rental_agreement_id', $service_rental_agreement->service_rental_agreement_id)
+                         ->update('tblservice_rental_agreement', ['invoice_rel_id' => $id]);
+                set_alert('success', _l('added_successfully', _l('invoice')));
+                redirect(admin_url('services/view_rental_agreement/' . $code));
+            }
+        } else {
+            // Update existing invoice
+            unset($invoice_data['save_as_draft']); // Remove draft flag to prevent resetting status
+            unset($invoice_data['number']); // Do not overwrite existing number
+            
+            $success = $this->invoices_model->update($invoice_data, $invoiceid);
+            if ($success) {
+                set_alert('success', _l('updated_successfully', _l('invoice')));
+            }
+            redirect(admin_url('services/view_rental_agreement/' . $code));
+        }
     }
 
     private function handle_file_uploads()
