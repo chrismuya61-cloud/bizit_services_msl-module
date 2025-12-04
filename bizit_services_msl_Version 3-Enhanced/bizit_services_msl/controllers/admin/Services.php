@@ -25,7 +25,7 @@ class Services extends AdminController
     }
 
     // ==========================================================
-    //  1. AJAX UTILITIES
+    //  1. AJAX UTILITIES & OPERATIONAL HELPERS
     // ==========================================================
 
     public function getNextServiceCode($type_code)
@@ -52,17 +52,11 @@ class Services extends AdminController
         echo json_encode($service);
     }
 
-    /**
-     * Fetches the rate/price of a specific accessory.
-     * Restored from V1 logic.
-     */
     public function get_service_accessory_by_id($id)
     {
         if (!$this->input->is_ajax_request()) {
              show_404();
         }
-        
-        // Using core model or direct DB if model method missing in V3
         $result = $this->db->where('id', $id)->get('tblitems')->row();
 
         if ($result) {
@@ -72,10 +66,6 @@ class Services extends AdminController
         }
     }
 
-    /**
-     * Fetches the service code for a given service ID.
-     * Restored from V1 logic.
-     */
     public function get_service_code()
     {
         if (!$this->input->is_ajax_request()) {
@@ -91,10 +81,31 @@ class Services extends AdminController
         echo json_encode($service);
     }
 
-    /**
-     * Quick update for Rental Agreement status via AJAX.
-     * Restored from V1 logic.
-     */
+    /* RESTORED V1 LOGIC: Operational Helpers */
+    public function get_serial_numbers_by_commodity_code()
+    {
+        $commodity_code = $this->input->post('commodity_code');
+        if ($commodity_code) {
+            $this->db->select('tblwh_inventory_serial_numbers.serial_number');
+            $this->db->from('tblwh_inventory_serial_numbers');
+            $this->db->join('tblitems', 'tblitems.id = tblwh_inventory_serial_numbers.commodity_id');
+            $this->db->where('tblitems.commodity_code', $commodity_code);
+            $query = $this->db->get();
+            echo json_encode($query->num_rows() > 0 ? $query->result_array() : []);
+        } else {
+            echo json_encode([]);
+        }
+    }
+
+    public function collect_produts()
+    {
+        // Restored workflow helper
+        $service_code = '001'; 
+        // Assuming services_core_model has get_all_services_warranty or falls back to get_all_services
+        $data['service_categories'] = $this->services_core_model->get_all_services($service_code);
+        $this->load->view('admin/services/manage_warranty', $data);
+    }
+
     public function update_status()
     {
         if (!$this->input->is_ajax_request()) {
@@ -263,9 +274,11 @@ class Services extends AdminController
         $data['report_files'] = json_encode($this->handle_file_uploads());
         if (empty($data['service_review_token'])) $data['service_review_token'] = md5(uniqid(rand(), true));
 
+        // Save Header
         $id = isset($data['edit_id']) && $data['edit_id'] ? $this->requests_model->edit_request($data) : $this->requests_model->add_request($data);
         $request_id = isset($data['edit_id']) ? $data['edit_id'] : $id;
 
+        // Process Services Loop
         if (isset($data['serviceid'])) {
             for ($i = 0; $i < count($data['serviceid']); $i++) {
                 if ($data['serviceid'][$i]) {
@@ -275,6 +288,7 @@ class Services extends AdminController
             }
         }
 
+        // Process Accessories
         $submitted_accessories = isset($data['accessoryserviceid']) ? $data['accessoryserviceid'] : [];
         $submitted_prices = isset($data['accessoryservice_price']) ? $data['accessoryservice_price'] : [];
         
@@ -292,6 +306,11 @@ class Services extends AdminController
                 }
             }
         }
+
+        /* --- RESTORED LOGIC FROM V1: Handling Inspection, Checklist & Collection Data --- */
+        $this->handle_inspection_data($request_id);
+        $this->handle_checklist_and_collection_data($request_id);
+        /* ------------------------------------------------------------------------------- */
 
         set_alert('success', 'Request Saved');
         redirect(admin_url('services/view_request/' . $data['service_request_code']));
@@ -331,6 +350,24 @@ class Services extends AdminController
 
         foreach(['dropped_off_by','dropped_off_date','req_received_by','received_date','received_signature'] as $f) {
             $data[$f] = $data['service_info']->$f ?? 'N/A';
+        }
+
+        // Inspection items to split for view
+        $inspection_items = $this->requests_model->get_inspection_data($data['service_info']->service_request_id);
+        $data['pre_inspection_items'] = [];
+        $data['post_inspection_items'] = [];
+        if($inspection_items) {
+            foreach ($inspection_items as $item) {
+                // Determine if it's array or object depending on V3 model return
+                $type = is_array($item) ? $item['inspection_type'] : $item->inspection_type;
+                $obj = is_array($item) ? (object)$item : $item;
+                
+                if ($type == 'pre_inspection') {
+                    $data['pre_inspection_items'][] = $obj;
+                } elseif ($type == 'post_inspection') {
+                    $data['post_inspection_items'][] = $obj;
+                }
+            }
         }
 
         $this->load->view('admin/services/view_request', $data);
@@ -622,7 +659,6 @@ class Services extends AdminController
             if ($success) {
                 set_alert('success', 'Calibration report ' . $action_type . ' successfully');
             } else {
-                // V1 logic suggests success message even if DB returns false (e.g. no changes made)
                 set_alert('success', 'Calibration report Saved'); 
             }
             redirect(admin_url('services/report/edit/' . $service_code));
@@ -715,6 +751,13 @@ class Services extends AdminController
         $service_request = $this->db->where('service_request_code', $code)->get('tblservice_request')->row();
         if (!$service_request) show_error('Service request not found.');
 
+        /* RESTORED V1 LOGIC: Date Calculation */
+        $date = strtotime($service_request->collection_date);
+        $one_year_later = strtotime('+1 year', $date);
+        $formatted_date = date("M", $one_year_later) . ', ' . date("d", $one_year_later) . ' ' . date("Y", $one_year_later);
+        $data['formatted_date'] = $formatted_date;
+        /* ----------------------------------- */
+
         $qr_data = site_url('service/certificate/validate/' . $service_request->service_request_code);
         $this->load->library('ciqrcode');
         $params['data'] = $qr_data;
@@ -765,16 +808,22 @@ class Services extends AdminController
 
     public function save_rental_agreement()
     {
+        if (!has_permission(BIZIT_SERVICES_MSL . '_rental_agreement', '', 'create')) access_denied(BIZIT_SERVICES_MSL . '_rental_agreement');
+
         $data = $this->input->post();
         $data['report_files'] = json_encode($this->handle_file_uploads());
         if (empty($data['service_review_token'])) $data['service_review_token'] = md5(uniqid(rand(), true));
 
         $field_operator_id = $data['field_operator'] ?? null;
         $site_name = $data['site_name'] ?? '';
+        $edit_id = $data['edit_id'] ?? null;
+        $agreement_id = null;
 
-        if (!empty($data['edit_id'])) {
+        // 1. Save Header
+        if (!empty($edit_id)) {
             $old_info = $this->rentals_model->get_rental_agreement($data['service_rental_agreement_code']);
             $this->rentals_model->edit_rental_agreement($data);
+            $agreement_id = $edit_id;
             
             if ($field_operator_id && $old_info && $old_info->field_operator != $field_operator_id) {
                 if(function_exists('rental_agreement_notifications')) {
@@ -785,11 +834,36 @@ class Services extends AdminController
                 }
             }
         } else {
-            $this->rentals_model->add_rental_agreement($data);
+            $agreement_id = $this->rentals_model->add_rental_agreement($data);
             if ($field_operator_id && function_exists('rental_agreement_notifications')) {
                 rental_agreement_notifications($field_operator_id, get_staff_user_id(), $data['service_rental_agreement_code'], 'field_operator_notice', $site_name);
             }
         }
+
+        /* --- RESTORED LOGIC FROM V1: Loop to Save Rental Details (Equipment) --- */
+        $serviceid = $this->input->post('serviceid', true);
+        $service_price = $this->input->post('service_price', true);
+        $details_id_edit = $this->input->post('service_rental_agreement_details_id', true);
+
+        if ($serviceid && $agreement_id) {
+            for ($i = 0; $i < count($serviceid); $i++) {
+                if ($serviceid[$i] != null && $service_price[$i] != null) {
+                    $detail_data = [
+                        'service_rental_agreement_id' => $agreement_id,
+                        'serviceid' => $serviceid[$i],
+                        'price' => $service_price[$i]
+                    ];
+
+                    if (!empty($details_id_edit[$i])) {
+                        $this->rentals_model->edit_rental_agreement_details($detail_data, $details_id_edit[$i]);
+                    } else {
+                        $this->rentals_model->add_rental_agreement_details($detail_data);
+                    }
+                }
+            }
+        }
+        /* ---------------------------------------------------------------------- */
+
         redirect(admin_url('services/new_rental_agreement/1/' . $data['service_rental_agreement_code']));
     }
 
@@ -826,6 +900,17 @@ class Services extends AdminController
         $data['rental_days'] = $interval->format("%a") - $data['service_info']->discounted_days;
         $data['actual_rental_days'] = $interval->format("%a");
         $data['currency_symbol'] = get_default_currency('symbol');
+
+        /* RESTORED V1 LOGIC: Invoice Status */
+        $invoice_status = null;
+        if (!empty($data['service_info']->invoice_rel_id)) {
+            $invoice_status = $this->db->select('status')
+                ->where('id', $data['service_info']->invoice_rel_id)
+                ->get('tblinvoices')
+                ->row();
+        }
+        $data['invoice_status'] = $invoice_status;
+        /* -------------------------------- */
         
         $this->load->view('admin/services/view_rental_agreement', $data);
     }
@@ -948,11 +1033,9 @@ class Services extends AdminController
         }
     }
 
-    // --- RESTORED: AJAX FILE TAB SUPPORT ---
     public function upload_file($type, $type_id, $upload = false)
     {
         $data['report_code'] = '';
-        // If this is a field report, fetch code for potential usage
         if($type == 'field_report') {
              $data['report_code'] = $this->db->select('report_code')->where('field_report_id', $type_id)->get('tblfield_report')->row('report_code');
         }
@@ -1256,6 +1339,120 @@ class Services extends AdminController
             $data = $this->input->post('data');
             $this->db->insert('tblgps_data', $data);
             $this->load->view('admin/services/form_success');
+        }
+    }
+
+    // ==========================================================
+    //  PRIVATE HELPER METHODS (RESTORED FROM V1)
+    // ==========================================================
+
+    private function handle_inspection_data($service_request_id)
+    {
+        // Pre-inspection and post-inspection data
+        $pre_inspection_items = $this->input->post('inspection_items', true);
+        $pre_remarks = $this->input->post('remarks', true);
+        $post_inspection_items = $this->input->post('postinspection_items', true);
+        $post_remarks = $this->input->post('postremarks', true);
+
+        // Removed items
+        $removed_pre_items = $this->input->post('removed_pre_items', true);
+        $removed_post_items = $this->input->post('removed_post_items', true);
+
+        if ($service_request_id) {
+            // Handle removed items
+            if ($removed_pre_items) {
+                $this->remove_inspection_items($service_request_id, explode(',', $removed_pre_items), 'pre_inspection');
+            }
+            if ($removed_post_items) {
+                $this->remove_inspection_items($service_request_id, explode(',', $removed_post_items), 'post_inspection');
+            }
+
+            // Save pre-inspection items
+            if (!empty($pre_inspection_items)) {
+                $this->handle_inspection_items($service_request_id, $pre_inspection_items, $pre_remarks, 'pre_inspection');
+            }
+
+            // Save post-inspection items
+            if (!empty($post_inspection_items)) {
+                $this->handle_inspection_items($service_request_id, $post_inspection_items, $post_remarks, 'post_inspection');
+            }
+        }
+    }
+
+    private function remove_inspection_items($service_request_id, $items, $type)
+    {
+        if (!empty($items)) {
+            $this->db->where_in('inspection_item', $items);
+            $this->db->where('service_request_id', $service_request_id);
+            $this->db->where('inspection_type', $type);
+            $this->db->delete('tblinspection_requests');
+        }
+    }
+
+    private function handle_inspection_items($service_request_id, $inspection_items, $remarks, $type)
+    {
+        foreach ($inspection_items as $item) {
+            $data = [
+                'service_request_id' => $service_request_id,
+                'inspection_item'    => $item,
+                'remarks_condition'  => isset($remarks[$item]) ? $remarks[$item] : null,
+                'inspection_type'    => $type,
+            ];
+
+            // Check if exists
+            $existing = $this->db->get_where('tblinspection_requests', [
+                'service_request_id' => $service_request_id,
+                'inspection_item'    => $item,
+                'inspection_type'    => $type,
+            ])->row();
+
+            if ($existing) {
+                $this->db->update('tblinspection_requests', $data, ['id' => $existing->id]);
+            } else {
+                $this->db->insert('tblinspection_requests', $data);
+            }
+        }
+    }
+
+    private function handle_checklist_and_collection_data($service_request_id)
+    {
+        // 1. Handle Checklist
+        $item_status = $this->input->post('item_status', true); // Array of statuses (X/√)
+        $checklist_items = ['Calibration Certificate Issued', 'Calibration Sticker Issued', 'Date of Next Calibration Advised', 'Equipment in Good Condition'];
+
+        if ($item_status && $service_request_id) {
+            foreach ($checklist_items as $index => $item) {
+                $data = [
+                    'service_request_id' => $service_request_id,
+                    'item'               => $item,
+                    'status'             => $item_status[$index] ?? '',
+                ];
+
+                $existing = $this->db->get_where('tblchecklist1', ['service_request_id' => $service_request_id, 'item' => $item])->row();
+                if ($existing) {
+                    $this->db->update('tblchecklist1', $data, ['id' => $existing->id]);
+                } else {
+                    $this->db->insert('tblchecklist1', $data);
+                }
+            }
+        }
+
+        // 2. Handle Collection (Released By) Data
+        $collection_data = [
+            'service_request_id'   => $service_request_id,
+            'released_by'          => $this->input->post('released_by', true),
+            'released_date'        => to_sql_date($this->input->post('released_date', true)),
+            'released_id_number'   => $this->input->post('released_id_number', true),
+            'collected_by'         => $this->input->post('collected_by', true),
+            'collected_date'       => to_sql_date($this->input->post('collected_date', true)),
+            'collected_id_number'  => $this->input->post('collected_id_number', true),
+        ];
+
+        $existing_col = $this->db->get_where('tblcollection1', ['service_request_id' => $service_request_id])->row();
+        if ($existing_col) {
+            $this->db->update('tblcollection1', $collection_data, ['service_request_id' => $service_request_id]);
+        } else {
+            $this->db->insert('tblcollection1', $collection_data);
         }
     }
 }
