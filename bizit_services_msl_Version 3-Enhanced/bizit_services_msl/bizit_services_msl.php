@@ -19,6 +19,10 @@ hooks()->add_filter('admin_init', 'bizit_services_msl_module_init_menu');
 // Assets (Scripts & Styles)
 hooks()->add_action('before_js_scripts_render', 'bizit_services_msl_script');
 hooks()->add_action('app_admin_head', 'bizit_services_add_head_components'); // Modern UI Injection
+hooks()->add_action('app_admin_head', 'bizit_services_add_head_components');
+function bizit_services_add_head_components(){
+    echo '<link href="' . module_dir_url('bizit_services_msl', 'assets/css/modern_bizit.css') . '" rel="stylesheet">';
+}
 
 // V3 Automations (Invoices & Tech Logic)
 hooks()->add_action('before_render_invoice_template', 'bizit_inject_tech_engineer_field');
