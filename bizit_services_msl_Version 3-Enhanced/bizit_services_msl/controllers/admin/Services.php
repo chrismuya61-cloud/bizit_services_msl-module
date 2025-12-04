@@ -334,22 +334,232 @@ class Services extends AdminController
         }
     }
 
+// [Version 3] Replace the existing save_calibration in controllers/admin/Services.php
+
     public function save_calibration()
     {
-        $data = $this->input->post();
-        if (in_array($data['calibration_instrument'], ['Total Station', 'Theodolite'])) {
-            foreach (['i_h_a', 'i_h_b', 'ii_h_a', 'ii_h_b', 'i_v_a', 'i_v_b'] as $f) {
-                if (isset($data[$f]) && is_array($data[$f])) $data[$f] = dms2dec($data[$f][0], $data[$f][1], $data[$f][2]);
+        // 1. Permission Check
+        if (!has_permission(BIZIT_SERVICES_MSL, '', 'create') && !has_permission(BIZIT_SERVICES_MSL, '', 'edit')) {
+            access_denied('Services');
+        }
+
+        $data = []; // Initialize data array
+        $calibration_instrument = $this->input->post('calibration_instrument', true);
+
+        // ==========================================================
+        //  INSTRUMENT: TOTAL STATION / THEODOLITE
+        // ==========================================================
+        if ($calibration_instrument == 'Total Station') {
+            // Map 1-48 EDM fields
+            for ($i = 1; $i <= 48; $i++) {
+                $data['i_edm_a_' . $i] = $this->input->post('i_edm_a_' . $i);
+            }
+            // Map 1-16 T_V_A fields
+            for ($i = 1; $i <= 16; $i++) {
+                $data['t_v_a_' . $i] = $this->input->post('t_v_a_' . $i);
+            }
+
+            // Angles Conversion (Degrees, Minutes, Seconds to Decimal)
+            $angles = ['i_h_a', 'i_h_b', 'ii_h_a', 'ii_h_b', 'i_v_a', 'i_v_b', 'ii_v_a', 'ii_v_b'];
+            foreach ($angles as $angle) {
+                $input = $this->input->post($angle);
+                // Handle array input for angles if split into [deg, min, sec]
+                if(is_array($input)) {
+                     $data[$angle] = dms2dec($input[0], $input[1], $input[2]);
+                } else {
+                     $data[$angle] = $input;
+                }
+            }
+            
+            // Post-calibration EDM fields (49-96)
+            for ($i = 49; $i <= 96; $i++) {
+                $data['i_edm_a_' . $i] = $this->input->post('i_edm_a_' . $i);
+            }
+
+            // Additional Post-calibration Angles
+            $post_angles = ['t_h_a', 't_h_b', 'tt_h_a', 'tt_h_b', 't_v_a', 't_v_b', 'tt_v_a', 'tt_v_b'];
+            foreach ($post_angles as $angle) {
+                $input = $this->input->post($angle);
+                if(is_array($input)) {
+                     $data[$angle] = dms2dec($input[0], $input[1], $input[2]);
+                } else {
+                     $data[$angle] = $input;
+                }
             }
         }
-        
-        if (!empty($data['edit_id'])) {
-            $this->requests_model->edit_request_calibration($data, $data['edit_id']);
-        } else {
-            $this->requests_model->add_request_calibration($data);
+
+        // ==========================================================
+        //  INSTRUMENT: THEODOLITE
+        // ==========================================================
+        if ($calibration_instrument == 'Theodolite') {
+            for ($i = 1; $i <= 14; $i++) {
+                $data['th_v_a_' . $i] = $this->input->post('th_v_a_' . $i);
+            }
+
+            // Explicit Angle Conversion for Theodolite
+            $theo_angles = [
+                'th_h_a', 'th_h_b', 'thh_h_a', 'thh_h_b', 
+                'th_v_a', 'th_v_b', 'thh_v_a', 'thh_v_b', 'thh_v_c'
+            ];
+            foreach ($theo_angles as $angle) {
+                $input = $this->input->post($angle);
+                if(is_array($input)) {
+                     $data[$angle] = dms2dec($input[0], $input[1], $input[2]);
+                }
+            }
+
+            // Post-calibration data
+            $theo_post_angles = [
+                'th_h_a1', 'th_h_b1', 'thh_h_a1', 'thh_h_b1',
+                'th_v_a1', 'th_v_b1', 'thh_v_a1', 'thh_v_b1', 'thh_v_c1'
+            ];
+            foreach ($theo_post_angles as $angle) {
+                $input = $this->input->post($angle);
+                if(is_array($input)) {
+                     $data[$angle] = dms2dec($input[0], $input[1], $input[2]);
+                }
+            }
         }
-        set_alert('success', 'Calibration Saved');
-        redirect(admin_url('services/report/edit/' . $data['service_code']));
+
+        // ==========================================================
+        //  INSTRUMENT: GNSS
+        // ==========================================================
+        if ($calibration_instrument == 'GNSS') {
+            // Pre-Calibration Checks (Table A1 - A4)
+            $prefixes = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'xi', 'x'];
+            $suffixes = ['a', 'b', 'c']; // Tables
+            
+            foreach ($suffixes as $s) {
+                foreach ($prefixes as $p) {
+                    for ($i = 1; $i <= 3; $i++) {
+                        $key = "{$p}_v_{$s}_{$i}";
+                        $data[$key] = $this->input->post($key);
+                    }
+                }
+            }
+
+            // Post-Calibration Checks (Table A1 - A4 Post)
+            $post_suffixes = ['aa', 'bb', 'cc'];
+            foreach ($post_suffixes as $s) {
+                foreach ($prefixes as $p) {
+                    for ($i = 1; $i <= 3; $i++) {
+                        $key = "{$p}_v_{$s}_{$i}";
+                        $data[$key] = $this->input->post($key);
+                    }
+                }
+            }
+
+            // Receiver Info
+            for ($i = 1; $i <= 13; $i++) {
+                $data['r_v_a_' . $i] = $this->input->post('r_v_a_' . $i);
+            }
+
+            // Time Data Handling
+            $current_date = date('Y-m-d');
+            for ($i = 1; $i <= 6; $i++) {
+                $start = $this->input->post('start_time_' . $i);
+                $stop = $this->input->post('stop_time_' . $i);
+                if($start) $data['start_time_' . $i] = $current_date . ' ' . date('H:i:s', strtotime($start));
+                if($stop) $data['stop_time_' . $i] = $current_date . ' ' . date('H:i:s', strtotime($stop));
+            }
+        }
+
+        // ==========================================================
+        //  INSTRUMENT: LEVEL
+        // ==========================================================
+        if ($calibration_instrument == 'Level') {
+            // Instrument Info
+            for ($i = 1; $i <= 9; $i++) {
+                $data['lv_v_a_' . $i] = $this->input->post('lv_v_a_' . $i, true);
+            }
+
+            // Pre-calibration (a, b, c, d) and Post-calibration (e, f, g, h)
+            $level_prefixes = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+            
+            // Pre
+            foreach ($level_prefixes as $p) {
+                $data["{$p}_backsight_a"] = $this->input->post("{$p}_backsight_a", true);
+                $data["{$p}_foresight_b"] = $this->input->post("{$p}_foresight_b", true);
+                $data["{$p}_backsight_c"] = $this->input->post("{$p}_backsight_c", true);
+                $data["{$p}_foresight_d"] = $this->input->post("{$p}_foresight_d", true);
+            }
+
+            // Post
+            foreach ($level_prefixes as $p) {
+                $data["{$p}_backsight_e"] = $this->input->post("{$p}_backsight_e", true);
+                $data["{$p}_foresight_f"] = $this->input->post("{$p}_foresight_f", true);
+                $data["{$p}_backsight_g"] = $this->input->post("{$p}_backsight_g", true);
+                $data["{$p}_foresight_h"] = $this->input->post("{$p}_foresight_h", true);
+            }
+        }
+
+        // ==========================================================
+        //  INSTRUMENT: LASERS
+        // ==========================================================
+        if ($calibration_instrument == 'lasers') {
+            // Laser Instrument Info
+            for ($i = 1; $i <= 9; $i++) {
+                $data['ls_v_a_' . $i] = $this->input->post('ls_v_a_' . $i, true);
+            }
+
+            // Explicit Laser Fields
+            $laser_fields = [
+                'hh_bsa1', 'hh_fsa1', 'hl_bsa1', 'hl_fsa1',
+                'hh_bsa2', 'hh_fsa2', 'vl_bsa1', 'vl_fsa1',
+                'hh_bsa3', 'hh_fsa3', 'hl_bsa2', 'hl_fsa2',
+                'hh_bsa4', 'hh_fsa4', 'vl_bsa2', 'vl_fsa2'
+            ];
+            foreach($laser_fields as $f){
+                $data[$f] = $this->input->post($f, true);
+            }
+        }
+
+        // ==========================================================
+        //  COMMON FIELDS & SAVING
+        // ==========================================================
+        $data['calibration_instrument'] = $calibration_instrument;
+        $data['calibration_remark'] = $this->input->post('calibration_remark', true);
+        
+        // IDs for linking
+        $service_code = $this->input->post('service_code', true);
+        $edit_id = $this->input->post('edit_id', true);
+
+        if (!empty($service_code)) {
+            $service_info = $this->db->where('service_request_code', $service_code)->get('tblservice_request')->row();
+            if($service_info) {
+                $data['service_request_id'] = $service_info->service_request_id;
+            }
+        }
+
+        // Perform Save/Update via Requests Model (V3 Architecture)
+        $success = false;
+        $action_type = null;
+
+        if (empty($edit_id)) {
+            $success = $this->requests_model->add_request_calibration($data);
+            $action_type = 'added';
+        } else {
+            $success = $this->requests_model->edit_request_calibration($data, $edit_id);
+            $action_type = 'updated';
+        }
+
+        // Handle Response
+        $autosave = $this->input->post('autosave', true);
+        
+        if (!isset($autosave)) {
+            if ($success) {
+                set_alert('success', 'Calibration report ' . $action_type . ' successfully');
+            } else {
+                set_alert('warning', 'No changes made or save failed');
+            }
+            redirect(admin_url('services/report/edit/' . $service_code));
+        } else {
+            // AJAX Autosave response
+            echo json_encode([
+                'success' => $success, 
+                'message' => $success ? 'Calibration report ' . $action_type . ' successfully' : 'Save failed'
+            ]);
+        }
     }
 
     public function request_invoice_generation($code = null)
