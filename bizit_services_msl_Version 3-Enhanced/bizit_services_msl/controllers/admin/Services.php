@@ -1343,6 +1343,45 @@ class Services extends AdminController
     }
 
     // ==========================================================
+    //  7. APPROVAL WORKFLOW
+    // ==========================================================
+
+    public function approve_entity($type, $id)
+    {
+        // Check Special Permission
+        if (!has_permission('bizit_services_msl_approvals', '', 'approve') && !is_admin()) {
+            access_denied('Approvals');
+        }
+
+        $success = false;
+        $table = ($type == 'rental') ? 'tblservice_rental_agreement' : 'tblservice_request';
+        $id_column = ($type == 'rental') ? 'service_rental_agreement_id' : 'service_request_id';
+
+        $data = [
+            'approval_status' => 2, // Approved
+            'approved_by'     => get_staff_user_id(),
+            'date_approved'   => date('Y-m-d H:i:s')
+        ];
+
+        $this->db->where($id_column, $id);
+        $this->db->update($table, $data);
+
+        if ($this->db->affected_rows() > 0) {
+            set_alert('success', 'Entity Approved Successfully');
+            
+            // Notification logic here
+            // add_notification([...]);
+        }
+
+        $redirect_url = ($type == 'rental') ? 'services/view_rental_agreement/' : 'services/view_request/';
+        
+        // Fetch Code to redirect (Optional helper needed to get code by ID)
+        // For now, redirect to list
+        redirect(admin_url('services/' . ($type == 'rental' ? 'rental_agreements' : 'requests')));
+    }
+
+    
+    // ==========================================================
     //  PRIVATE HELPER METHODS (RESTORED FROM V1)
     // ==========================================================
 
