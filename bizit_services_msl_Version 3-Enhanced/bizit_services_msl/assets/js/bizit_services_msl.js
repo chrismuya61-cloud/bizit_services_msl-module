@@ -331,3 +331,33 @@ $(document).ready(function() {
         }
     }
 });
+
+// ==========================================================
+//  8. SALES ORDER INTEGRATION (Inject Button into Estimate)
+// ==========================================================
+
+$(document).ready(function() {
+    // Check if we are viewing an Estimate
+    if ($('.estimate-pipeline').length === 0 && $('body').hasClass('estimates')) {
+        
+        // Find the ID of the current estimate from the URL or hidden field
+        // Standard Perfex URL: admin/estimates/list_estimates/123
+        var urlPath = window.location.pathname;
+        var estimateId = urlPath.substring(urlPath.lastIndexOf('/') + 1);
+
+        if ($.isNumeric(estimateId)) {
+            var btnGroup = $('.top-lead-menu .pull-right, .panel-body ._buttons');
+            
+            // Check if button already exists
+            if ($('#btn-convert-so').length === 0) {
+                var convertUrl = admin_url + 'services/sales_orders/convert_estimate/' + estimateId;
+                
+                var btnHtml = '<a href="' + convertUrl + '" id="btn-convert-so" class="btn btn-info mleft5">';
+                btnHtml += '<i class="fa fa-shopping-cart"></i> Convert to Sales Order</a>';
+                
+                // Prepend to the button group
+                btnGroup.prepend(btnHtml);
+            }
+        }
+    }
+});
